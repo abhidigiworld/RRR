@@ -1,17 +1,24 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaRobot } from "react-icons/fa";
 
 const Header = () => {
-    const location = useLocation(); // Get the current route
+    const location = useLocation();
+    const navigate = useNavigate();
+    const user = JSON.parse(localStorage.getItem('user'));
+    const hideFeatures = ["/about", "/login", "/contact", "/registration"].includes(location.pathname);
 
-    // Check if the current path is "/about" or "/login" (or any other route where "Features" shouldn't be shown)
-    const hideFeatures = ["/about", "/login", "/contact" , "/registration"].includes(location.pathname);
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/');
+        window.location.reload();
+    };
 
     return (
         <header className="bg-gradient-to-r from-gray-900 to-gray-800 shadow-lg py-3">
             <div className="max-w-7xl mx-auto flex justify-between items-center px-4">
-                {/* Animated Logo */}
+                {/* Logo and Navigation */}
                 <motion.div 
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
@@ -24,91 +31,80 @@ const Header = () => {
                     </h1>
                 </motion.div>
 
-                {/* Navigation Menu */}
                 <nav className="hidden md:flex items-center space-x-6">
-                    <NavLink
-                        to="/"
-                        className={({ isActive }) =>
-                            `font-medium py-2 px-4 rounded-lg transition-all duration-300 ${
-                                isActive
-                                    ? "text-white bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg"
-                                    : "text-gray-300 hover:text-white hover:bg-gray-700"
-                            }`
-                        }
-                    >
+                    <NavLink to="/" className={({ isActive }) => `font-medium py-2 px-4 rounded-lg transition-all duration-300 ${isActive ? "text-white bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg" : "text-gray-300 hover:text-white hover:bg-gray-700"}`}>
                         Home
                     </NavLink>
-                    <NavLink
-                        to="/about"
-                        className={({ isActive }) =>
-                            `font-medium py-2 px-4 rounded-lg ${isActive
-                                ? "text-white bg-indigo-600 shadow-md"
-                                : "text-gray-400 hover:text-white hover:bg-indigo-500 transition"
-                            }`
+                    <NavLink 
+                        to="/about" 
+                        className={({ isActive }) => 
+                            `font-medium py-2 px-4 rounded-lg ${isActive 
+                                ? "text-white bg-indigo-600 shadow-md" 
+                                : "text-gray-400 hover:text-white hover:bg-indigo-500 transition"}`
                         }
                     >
                         About
                     </NavLink>
-
-                    {/* Conditionally Render "Features" */}
                     {!hideFeatures && (
-                        <a
-                            href="#features"
-                            className="text-gray-400 font-medium py-2 px-4 rounded-lg hover:text-white hover:bg-indigo-500 transition"
-                        >
+                        <a href="#features" className="text-gray-400 font-medium py-2 px-4 rounded-lg hover:text-white hover:bg-indigo-500 transition">
                             Features
                         </a>
                     )}
-
-                    <NavLink
-                        to="/contact"
-                        className={({ isActive }) =>
-                            `font-medium py-2 px-4 rounded-lg ${isActive
-                                ? "text-white bg-indigo-600 shadow-md"
-                                : "text-gray-400 hover:text-white hover:bg-indigo-500 transition"
-                            }`
+                    <NavLink 
+                        to="/contact" 
+                        className={({ isActive }) => 
+                            `font-medium py-2 px-4 rounded-lg ${isActive 
+                                ? "text-white bg-indigo-600 shadow-md" 
+                                : "text-gray-400 hover:text-white hover:bg-indigo-500 transition"}`
                         }
                     >
                         Contact
                     </NavLink>
                 </nav>
 
-                {/* Action Buttons */}
-                <div className="flex space-x-4">
-                    <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        <NavLink
-                            to="/login"
-                            className={({ isActive }) =>
-                                `py-2 px-4 rounded-md ${
-                                    isActive
-                                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                                        : "bg-blue-500 text-white hover:bg-blue-600 transition"
-                                }`
-                            }
-                        >
-                            Login
-                        </NavLink>
-                    </motion.div>
-                    <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        <NavLink
-                            to="/registration"
-                            className={({ isActive }) =>
-                                `py-2 px-4 rounded-md ${
-                                    isActive
-                                        ? "bg-gradient-to-r from-green-500 to-blue-500 text-white shadow-lg"
-                                        : "bg-green-500 text-white hover:bg-green-600 transition"
-                                }`
-                            }
-                        >
-                            Register
-                        </NavLink>
-                    </motion.div>
+                {/* User Info and Actions */}
+                <div className="flex space-x-4 items-center">
+                    {user ? (
+                        <>
+                            <span className="text-gray-300">Welcome, {user.fullName}</span>
+                            <motion.div
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                            >
+                                <button
+                                    onClick={handleLogout}
+                                    className="py-2 px-4 rounded-md bg-red-500 text-white hover:bg-red-600 transition"
+                                >
+                                    Logout
+                                </button>
+                            </motion.div>
+                        </>
+                    ) : (
+                        <>
+                            <motion.div
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                            >
+                                <NavLink
+                                    to="/login"
+                                    className={({ isActive }) => `py-2 px-4 rounded-md ${isActive ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg" : "bg-blue-500 text-white hover:bg-blue-600 transition"}`}
+                                >
+                                    Login
+                                </NavLink>
+                            </motion.div>
+                            <motion.div
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                            >
+                                <NavLink
+                                    to="/registration"
+                                    className={({ isActive }) => `py-2 px-4 rounded-md ${isActive ? "bg-gradient-to-r from-green-500 to-blue-500 text-white shadow-lg" : "bg-green-500 text-white hover:bg-green-600 transition"}`}
+                                >
+                                    Register
+                                </NavLink>
+                            </motion.div>
+                        </>
+                    )}
                 </div>
             </div>
         </header>

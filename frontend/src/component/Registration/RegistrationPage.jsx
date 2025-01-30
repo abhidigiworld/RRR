@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Header from "../Header";
 import Footer from "../Footer";
+import { useNavigate } from "react-router-dom";
 
 const RegistrationPage = () => {
     const [formData, setFormData] = useState({
@@ -12,6 +13,8 @@ const RegistrationPage = () => {
     });
 
     const [emailError, setEmailError] = useState("");
+
+    const navigate = useNavigate();
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -36,8 +39,9 @@ const RegistrationPage = () => {
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        
         if (formData.password !== formData.confirmPassword) {
             alert("Passwords do not match!");
             return;
@@ -47,17 +51,23 @@ const RegistrationPage = () => {
             return;
         }
 
-        // Handle form submission logic
-        console.log("Form Submitted", formData);
+        try {
+            const response = await fetch("http://localhost:3001/api/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData),
+            });
 
-        // Reset form after submission (optional)
-        setFormData({
-            fullName: "",
-            email: "",
-            ageCategory: "",
-            password: "",
-            confirmPassword: "",
-        });
+            if (response.ok) {
+                alert("Registration successful! Please login.");
+                navigate('/login');
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || "Registration failed");
+            }
+        } catch (error) {
+            alert("An error occurred. Please try again later.");
+        }
     };
 
     return (

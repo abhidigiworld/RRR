@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Header from "./Header";
 import Footer from "./Footer";
 import { FaRobot, FaFileAlt, FaUserTie } from "react-icons/fa";
+import backgroundImage from "../assets/rrrbackground.gif";
 
 const FeatureCard = ({ icon: Icon, title, description }) => (
     <motion.div
@@ -42,6 +43,8 @@ const WelcomePage = () => {
         }
     ];
 
+    const user = JSON.parse(localStorage.getItem('user'));
+
     return (
         <div className="min-h-screen flex flex-col">
             <Header />
@@ -50,7 +53,7 @@ const WelcomePage = () => {
             <section 
                 className="relative h-screen w-full flex items-center"
                 style={{
-                    backgroundImage: "url('/src/assets/rrrbackground.gif')",
+                    backgroundImage: `url(${backgroundImage})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                     backgroundRepeat: "no-repeat",
@@ -66,11 +69,8 @@ const WelcomePage = () => {
                             transition={{ duration: 0.8 }}
                             className="flex-1 max-w-2xl"
                         >
-                            <h2 className="text-6xl font-bold leading-tight mb-8 text-left text-white">
-                                Transform Your Career with{" "}
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                                    RRR
-                                </span>
+                            <h2 className="text-5xl font-bold text-white mb-6">
+                                {user ? `Welcome back, ${user.fullName}` : 'Welcome to RRR'}
                             </h2>
                             <p className="text-2xl text-gray-300 mb-12 text-left leading-relaxed">
                                 AI-powered tools to create professional resumes and ace interviews.

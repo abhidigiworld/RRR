@@ -5,7 +5,7 @@ import Footer from "../Footer";
 
 const LoginPage = () => {
     const [formData, setFormData] = useState({
-        username: "",
+        email: "",
         password: "",
         subscribe: false,
     });
@@ -23,36 +23,29 @@ const LoginPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError(""); // Clear previous error message on form submission
+        setError("");
 
         try {
-            const response = await fetch("http://localhost:5000/api/login", {
+            const response = await fetch("http://localhost:3001/api/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    email: formData.email,
+                    password: formData.password
+                }),
             });
 
             if (response.ok) {
                 const data = await response.json();
-                console.log("Login successful", data);
-
-                // Assuming the response includes the user type
-                const { userType } = data; // userType could be 'admin', 'subadmin', 'user'
-
-                // Based on userType, redirect to different pages
-                if (userType === "admin") {
-                    navigate("/admin");
-                } else if (userType === "subadmin") {
-                    navigate("/subadmin");
-                } else {
-                    navigate("/user");
-                }
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.result));
+                navigate('/');
+                window.location.reload();
             } else {
-                const data = await response.json();
-                setError(data.message || "Login failed"); // Display error message from the response
+                const errorData = await response.json();
+                setError(errorData.message || "Login failed");
             }
         } catch (error) {
-            console.error("Error:", error);
             setError("An error occurred. Please try again later.");
         }
     };
@@ -76,10 +69,10 @@ const LoginPage = () => {
                         <div className="space-y-4">
                             <label className="block">
                                 <input
-                                    type="text"
-                                    name="username"
-                                    placeholder="Username"
-                                    value={formData.username}
+                                    type="email"
+                                    name="email"
+                                    placeholder="Email"
+                                    value={formData.email}
                                     onChange={handleChange}
                                     required
                                     className="w-full px-6 py-3 text-black rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"

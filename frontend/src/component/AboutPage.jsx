@@ -72,12 +72,12 @@ const AboutPage = () => {
             name: "Deepak",
             role: "Designer",
             description: "Creative designer with an eye for detail. Transforms ideas into visually stunning experiences.",
-            image: "https://avatars.githubusercontent.com/deepak-pro",
-            skills: [SiFigma, SiAdobexd],
+            image: "https://avatars.githubusercontent.com/DeepakRajjj",
+            skills: [SiJavascript, SiReact, SiTailwindcss],
             socialLinks: [
-                { icon: FaGithub, url: "https://github.com/deepak-pro" },
-                { icon: FaLinkedin, url: "https://linkedin.com/in/deepak-pro" },
-                { icon: FaTwitter, url: "https://twitter.com/deepak_pro" }
+                { icon: FaGithub, url: "https://github.com/DeepakRajjj" },
+                { icon: FaLinkedin, url: "https://linkedin.com/in/deepak-rajj" },
+                
             ]
         },
         {
@@ -89,7 +89,7 @@ const AboutPage = () => {
             socialLinks: [
                 { icon: FaGithub, url: "https://github.com/abhidigiworld" },
                 { icon: FaLinkedin, url: "https://linkedin.com/in/abhidigiworld" },
-                { icon: FaTwitter, url: "https://twitter.com/abhidigiworld" }
+                { icon: FaTwitter, url: "https://twitter.com/abhisharma0812" }
             ]
         },
         {
