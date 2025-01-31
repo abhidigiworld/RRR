@@ -5,6 +5,10 @@ import AboutPage from "./component/AboutPage";
 import Contact from "./component/Contact";
 import Login from "./component/Login/Login";
 import RegistrationPage from "./component/Registration/RegistrationPage";
+import ResumeBuilder from './component/ResumeBuilder/ResumeBuilder';
+import MockInterview from './component/MockInterview/MockInterview';
+import LearnMore from "./component/LearnMore/LearnMore";
+import UserProfile from './component/UserProfile/UserProfile';
 
 const AuthCheck = ({ children }) => {
     const navigate = useNavigate();
@@ -28,6 +32,18 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/registration" element={<RegistrationPage />} />
+        <Route path="/resume-builder" element={<ResumeBuilder />} />
+        <Route path="/mock-interviews" element={
+          <AuthCheck>
+            <MockInterview />
+          </AuthCheck>
+        } />
+        <Route path="/learn-more" element={<LearnMore />} />
+        <Route path="/profile" element={
+          <AuthCheck>
+            <UserProfile />
+          </AuthCheck>
+        } />
         <Route path="*" element={<h1>404 Not Found</h1>} />
       </Routes>
     </Router>

@@ -1,18 +1,19 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Header from "./Header";
 import Footer from "./Footer";
 import { FaRobot, FaFileAlt, FaUserTie } from "react-icons/fa";
 import backgroundImage from "../assets/rrrbackground.gif";
 
-const FeatureCard = ({ icon: Icon, title, description }) => (
+const FeatureCard = ({ icon: Icon, title, description, path, onNavigate }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         whileHover={{ scale: 1.05 }}
         transition={{ duration: 0.3 }}
-        className="bg-gray-800 p-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300"
+        className="bg-gray-800 p-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer"
+        onClick={() => path && onNavigate(path)}
     >
         <div className="flex flex-col items-center text-center">
             <div className="p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4">
@@ -25,21 +26,26 @@ const FeatureCard = ({ icon: Icon, title, description }) => (
 );
 
 const WelcomePage = () => {
+    const navigate = useNavigate();
+
     const features = [
         {
             icon: FaRobot,
             title: "AI-Powered Resume Builder",
-            description: "Create professional resumes tailored to your industry with our advanced AI technology."
+            description: "Create professional resumes tailored to your industry with our advanced AI technology.",
+            path: "/resume-builder"
         },
         {
             icon: FaUserTie,
             title: "Mock Interviews",
-            description: "Practice with our AI interviewer and get real-time feedback to improve your performance."
+            description: "Practice with our AI interviewer and get real-time feedback to improve your performance.",
+            path: "/mock-interviews"
         },
         {
             icon: FaFileAlt,
             title: "Smart Recognition",
-            description: "Our system analyzes your skills and experience to match you with the perfect opportunities."
+            description: "Our system analyzes your skills and experience to match you with the perfect opportunities.",
+            path: "/smart-recognition"
         }
     ];
 
@@ -80,6 +86,7 @@ const WelcomePage = () => {
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
+                                    onClick={() => navigate('/mock-interviews')}
                                     className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
                                 >
                                     Get Started
@@ -87,6 +94,7 @@ const WelcomePage = () => {
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
+                                    onClick={() => navigate('/learn-more')}
                                     className="px-10 py-4 bg-white text-gray-800 rounded-lg text-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
                                 >
                                     Learn More
@@ -141,7 +149,11 @@ const WelcomePage = () => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {features.map((feature, index) => (
-                            <FeatureCard key={index} {...feature} />
+                            <FeatureCard 
+                                key={index} 
+                                {...feature} 
+                                onNavigate={navigate}
+                            />
                         ))}
                     </div>
                 </div>

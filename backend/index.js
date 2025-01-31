@@ -7,7 +7,12 @@ const cors = require('cors');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: true, // Allow all origins temporarily for debugging
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -64,14 +69,17 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    console.log("Login attempt for email:", email);
 
+    const user = await User.findOne({ email });
     if (!user) {
+      console.log("User not found:", email);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
+      console.log("Invalid password for user:", email);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
@@ -81,6 +89,7 @@ app.post('/api/login', async (req, res) => {
       { expiresIn: '1h' }
     );
 
+    console.log("Login successful for user:", email);
     res.status(200).json({ 
       result: user, 
       token, 
@@ -88,8 +97,44 @@ app.post('/api/login', async (req, res) => {
       fullName: user.fullName
     });
   } catch (error) {
-    res.status(500).json({ message: 'Something went wrong' });
+    console.error("Login error:", error);
+    res.status(500).json({ message: 'Something went wrong', error: error.message });
   }
+});
+
+// Protected route to get user data
+app.get('/api/resume/user-data', async (req, res) => {
+    try {
+        // Get token from header
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ message: 'No token provided' });
+        }
+
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Find user
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Return user data (excluding sensitive information)
+        res.status(200).json({
+            fullName: user.fullName,
+            email: user.email,
+            ageCategory: user.ageCategory
+            // Add other fields as needed
+        });
+
+    } catch (error) {
+        console.error('Error fetching user data:', error);
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ message: 'Invalid token' });
+        }
+        res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 const PORT = process.env.PORT || 3001;
