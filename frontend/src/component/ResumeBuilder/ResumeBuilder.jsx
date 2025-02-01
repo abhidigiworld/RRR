@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../Header';
 import Footer from '../Footer';
 import { FaPhone, FaEnvelope, FaGithub, FaLinkedin, FaPlus, FaTrash, FaMagic } from 'react-icons/fa';
@@ -63,6 +63,12 @@ const ResumeBuilder = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [showSaveModal, setShowSaveModal] = useState(false);
+    const [saveLoading, setSaveLoading] = useState(false);
+    const [saveError, setSaveError] = useState(null);
+
+    // Initialize with default empty values
     const [formData, setFormData] = useState({
         personal: {
             fullName: '',
@@ -72,49 +78,41 @@ const ResumeBuilder = () => {
             github: '',
             linkedin: ''
         },
-        training: [
-            {
-                id: 1,
-                company: '',
-                position: '',
-                duration: '',
-                points: ['']
-            }
-        ],
-        projects: [
-            {
-                id: 1,
-                title: '',
-                technologies: '',
-                duration: '',
-                points: [''],
-                githubLink: ''
-            }
-        ],
-        certifications: [
-            {
-                id: 1,
-                title: '',
-                platform: '',
-                date: '',
-                certificateLink: ''
-            }
-        ],
+        training: [{
+            id: 1,
+            company: '',
+            position: '',
+            duration: '',
+            points: ['']
+        }],
+        projects: [{
+            id: 1,
+            title: '',
+            technologies: '',
+            duration: '',
+            points: [''],
+            githubLink: ''
+        }],
+        certifications: [{
+            id: 1,
+            title: '',
+            platform: '',
+            date: '',
+            certificateLink: ''
+        }],
         technicalSkills: {
             languages: '',
             technologies: '',
             skills: ''
         },
-        education: [
-            {
-                id: 1,
-                institution: '',
-                degree: '',
-                duration: '',
-                location: '',
-                details: ''
-            }
-        ]
+        education: [{
+            id: 1,
+            institution: '',
+            degree: '',
+            duration: '',
+            location: '',
+            details: ''
+        }]
     });
 
     const [sections, setSections] = useState([
@@ -125,54 +123,36 @@ const ResumeBuilder = () => {
         { id: 'education', title: 'Education', isVisible: true }
     ]);
 
-    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-
     useEffect(() => {
-        const fetchUserData = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                navigate('/login');
-                return;
-            }
-
-            setLoading(true);
-            setError(null);
-
+        const fetchResumeData = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_API_URL}/resume/user-data`, {
-                    method: 'GET',
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
+
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/resume/fetch`, {
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${token}`
                     }
                 });
 
-                if (!response.ok) {
-                    throw new Error('Failed to fetch user data');
+                if (response.ok) {
+                    const data = await response.json();
+                    // Only update if we got data back
+                    setFormData(prevData => ({
+                        ...prevData,
+                        ...data
+                    }));
                 }
-
-                const data = await response.json();
-                
-                // Update form data with user information
-                setFormData(prevData => ({
-                    ...prevData,
-                    personal: {
-                        ...prevData.personal,
-                        fullName: data.fullName || '',
-                        email: data.email || '',
-                        // Add other fields as needed
-                    }
-                }));
-
-            } catch (err) {
-                console.error('Error fetching user data:', err);
-                setError('Failed to load user data. Please try again later.');
-            } finally {
-                setLoading(false);
+            } catch (error) {
+                console.error('Error fetching resume:', error);
+                setError('Failed to fetch resume data');
             }
         };
 
-        fetchUserData();
+        fetchResumeData();
     }, [navigate]);
 
     const handlePersonalChange = (e) => {
@@ -270,6 +250,101 @@ const ResumeBuilder = () => {
     const handleAIInput = () => {
         console.log("AI Input functionality will be implemented");
     };
+
+    const handleSaveResume = async () => {
+        setSaveLoading(true);
+        setSaveError(null);
+        
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                navigate('/login');
+                return;
+            }
+
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/resume/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save resume');
+            }
+
+            const data = await response.json();
+            console.log('Resume saved:', data);
+            setShowSaveModal(false);
+        } catch (error) {
+            console.error('Error saving resume:', error);
+            setSaveError('Failed to save resume');
+        } finally {
+            setSaveLoading(false);
+        }
+    };
+
+    const SaveModal = () => (
+        <AnimatePresence>
+            {showSaveModal && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+                >
+                    <motion.div
+                        initial={{ scale: 0.95 }}
+                        animate={{ scale: 1 }}
+                        exit={{ scale: 0.95 }}
+                        className="bg-white rounded-lg p-8 max-w-md w-full mx-4"
+                    >
+                        <h3 className="text-xl font-bold mb-4">Save Resume</h3>
+                        <p className="mb-6">Are you sure you want to save your resume? This will update your existing resume data.</p>
+                        
+                        {saveError && (
+                            <div className="mb-4 text-red-500">{saveError}</div>
+                        )}
+                        
+                        <div className="flex justify-end space-x-4">
+                            <button
+                                onClick={() => setShowSaveModal(false)}
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                                disabled={saveLoading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveResume}
+                                disabled={saveLoading}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {saveLoading ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-red-500">{error}</div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -728,6 +803,14 @@ const ResumeBuilder = () => {
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
+                                onClick={() => setShowSaveModal(true)}
+                                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                            >
+                                Save Resume
+                            </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
                                 onClick={() => setIsPreviewOpen(true)}
                                 className="px-6 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"
                             >
@@ -750,6 +833,7 @@ const ResumeBuilder = () => {
                 onClose={() => setIsPreviewOpen(false)}
                 formData={formData}
             />
+            <SaveModal />
         </>
     );
 };

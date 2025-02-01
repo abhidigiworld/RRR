@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FaUser, FaFileAlt, FaHistory, FaCog, FaSignOutAlt } from 'react-icons/fa';
+import { FaUser, FaFileAlt, FaHistory, FaCog, FaSignOutAlt, FaEdit, FaDownload } from 'react-icons/fa';
 import Header from '../Header';
 import Footer from '../Footer';
 import { useNavigate } from 'react-router-dom';
+import PreviewModal from '../ResumeBuilder/PreviewModal';
 
 const UserProfile = () => {
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [resumeData, setResumeData] = useState(null);
+    const [interviewHistory, setInterviewHistory] = useState([]);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -32,6 +36,31 @@ const UserProfile = () => {
 
                 const data = await response.json();
                 setUserData(data);
+
+                // Fetch resume data
+                const resumeResponse = await fetch(`${import.meta.env.VITE_API_URL}/resume/fetch`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (resumeResponse.ok) {
+                    const resumeData = await resumeResponse.json();
+                    setResumeData(resumeData);
+                }
+
+                // Fetch interview history (assuming you have this endpoint)
+                const historyResponse = await fetch(`${import.meta.env.VITE_API_URL}/interview/history`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (historyResponse.ok) {
+                    const data = await historyResponse.json();
+                    setInterviewHistory(data);
+                }
+
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -41,6 +70,34 @@ const UserProfile = () => {
 
         fetchUserData();
     }, [navigate]);
+
+    const handleEditResume = () => {
+        navigate('/resume-builder');
+    };
+
+    const handleDownloadResume = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/resume/download`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'resume.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            }
+        } catch (error) {
+            console.error('Error downloading resume:', error);
+        }
+    };
 
     if (loading) {
         return (
@@ -86,12 +143,35 @@ const UserProfile = () => {
                                 Resume
                             </h2>
                             <div className="space-y-4">
-                                <button 
-                                    onClick={() => navigate('/resume-builder')}
-                                    className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition"
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => setIsPreviewOpen(true)}
+                                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center justify-center"
                                 >
+                                    <FaHistory className="mr-2" />
+                                    Preview Resume
+                                </motion.button>
+                                
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={handleEditResume}
+                                    className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center"
+                                >
+                                    <FaEdit className="mr-2" />
                                     Edit Resume
-                                </button>
+                                </motion.button>
+                                
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={handleDownloadResume}
+                                    className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center justify-center"
+                                >
+                                    <FaDownload className="mr-2" />
+                                    Download Resume
+                                </motion.button>
                             </div>
                         </motion.div>
 
@@ -105,11 +185,34 @@ const UserProfile = () => {
                                 <FaHistory className="mr-2 text-blue-500" />
                                 Interview History
                             </h2>
-                            <p className="text-gray-500">No interviews completed yet</p>
+                            {interviewHistory.length > 0 ? (
+                                <div className="space-y-4">
+                                    {interviewHistory.map((interview, index) => (
+                                        <div
+                                            key={index}
+                                            className="border-l-4 border-blue-500 pl-4 py-2"
+                                        >
+                                            <p className="font-semibold">{interview.topic}</p>
+                                            <p className="text-sm text-gray-600">{interview.date}</p>
+                                            <p className="text-sm">Score: {interview.score}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-gray-600 text-center">No interview history available</p>
+                            )}
                         </motion.div>
                     </div>
                 </div>
             </div>
+
+            {/* Preview Modal */}
+            <PreviewModal
+                isOpen={isPreviewOpen}
+                onClose={() => setIsPreviewOpen(false)}
+                formData={resumeData}
+            />
+            
             <Footer />
         </>
     );

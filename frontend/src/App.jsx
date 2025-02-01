@@ -9,6 +9,7 @@ import ResumeBuilder from './component/ResumeBuilder/ResumeBuilder';
 import MockInterview from './component/MockInterview/MockInterview';
 import LearnMore from "./component/LearnMore/LearnMore";
 import UserProfile from './component/UserProfile/UserProfile';
+import ForgotPassword from './component/Login/ForgotPassword';
 
 const AuthCheck = ({ children }) => {
     const navigate = useNavigate();
@@ -44,6 +45,7 @@ function App() {
             <UserProfile />
           </AuthCheck>
         } />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<h1>404 Not Found</h1>} />
       </Routes>
     </Router>
