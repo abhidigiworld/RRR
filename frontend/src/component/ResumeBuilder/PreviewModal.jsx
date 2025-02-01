@@ -146,6 +146,34 @@ const PreviewModal = ({ isOpen, onClose, formData }) => {
                                     ))}
                                 </div>
 
+                                {/* Certifications Section */}
+                                <div className="mb-4">
+                                    <h2 className="text-lg font-bold border-b border-gray-800 pb-1 mb-3">Certifications</h2>
+                                    {displayData.certifications?.map((cert, index) => (
+                                        <div key={index} className="mb-3">
+                                            <div className="flex justify-between items-baseline">
+                                                <div>
+                                                    <p className="font-bold">{cert.title}</p>
+                                                    <p className="text-sm italic">{cert.platform}</p>
+                                                </div>
+                                                <p className="text-sm">{cert.date}</p>
+                                            </div>
+                                            {cert.certificateLink && (
+                                                <p className="text-sm mt-1">
+                                                    <a 
+                                                        href={cert.certificateLink} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800 underline"
+                                                    >
+                                                        View Certificate
+                                                    </a>
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
                                 {/* Technical Skills Section */}
                                 <div className="mb-4">
                                     <h2 className="text-lg font-bold border-b border-gray-800 pb-1 mb-3">Technical Skills</h2>
