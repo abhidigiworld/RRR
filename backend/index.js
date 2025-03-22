@@ -5,6 +5,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI("AIzaSyC06-P5LquDMk5HzrziOG3OFZyGnOmwVv0");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const app = express();
 app.use(express.json());
@@ -14,6 +17,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -386,6 +390,26 @@ app.post('/api/check-user', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+app.get('/',async(req,res)=>{
+  res.send('Hello')
+})
+
+app.post('/api/generate',async(req,res)=>{
+try{
+const {prompt} = req.body;
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+
+const result = await model.generateContent(`${prompt} ask 6 questions regarding this which is most important in interview`);
+console.log(result.response.text());
+return res.status(200).send({success:true , data: result }) 
+}catch(err){
+res.status(404).send({success:false, msg:err.message});
+
+}
+
+})
+
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
