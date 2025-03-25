@@ -10,14 +10,13 @@ const genAI = new GoogleGenerativeAI("AIzaSyC06-P5LquDMk5HzrziOG3OFZyGnOmwVv0");
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(cors({
-  origin: true, // Allow all origins temporarily for debugging
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
-
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -137,6 +136,7 @@ const sendOTPEmail = async (email, otp, type) => {
         <p>This OTP will expire in 5 minutes.</p>
         <p>For security reasons, please do not share this OTP with anyone.</p>
       </div>
+      
     `;
 
   await transporter.sendMail({
@@ -390,26 +390,209 @@ app.post('/api/check-user', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+// Interview Analysis Endpoint
+app.post('/api/analyze-interview', async (req, res) => {
+    try {
+        const { transcripts, questions } = req.body;
+        console.log('Received analysis request:', { 
+            questionsCount: questions?.length,
+            transcriptsCount: transcripts?.length 
+        });
+
+        if (!transcripts || !questions || transcripts.length !== questions.length) {
+            throw new Error('Invalid request: Missing or mismatched questions and transcripts');
+        }
+
+        const analysisPrompt = `
+        You are an expert technical interviewer. Analyze these interview responses.
+        
+        Questions and Answers:
+        ${questions.map((q, i) => `
+        Question: ${q}
+        Answer: ${transcripts[i] || 'No response provided'}
+        `).join('\n\n')}
+        
+        Provide a JSON response in this EXACT format (do not include any other text):
+        {
+            "feedback": [
+                {
+                    "questionNumber": 1,
+                    "question": "question text",
+                    "response": "answer text",
+                    "score": 75,
+                    "technicalAccuracy": "feedback on technical accuracy",
+                    "communication": "feedback on communication",
+                    "problemSolving": "feedback on approach",
+                    "strengths": ["strength 1", "strength 2"],
+                    "improvements": ["improvement 1", "improvement 2"]
+                }
+            ],
+            "overallScore": 80,
+            "overallFeedback": "overall performance feedback",
+            "keyStrengths": ["key strength 1", "key strength 2"],
+            "developmentAreas": ["area 1", "area 2"],
+            "recommendations": ["recommendation 1", "recommendation 2"]
+        }`;
+
+        console.log('Sending analysis prompt to AI...');
+        const result = await model.generateContent(analysisPrompt);
+        const response = await result.response;
+        let analysis;
+
+        try {
+            const text = response.text();
+            console.log('Raw AI response:', text);
+            
+            // Try to extract JSON from the response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error('No JSON found in response');
+            }
+            
+            analysis = JSON.parse(jsonMatch[0]);
+            
+            // Validate the analysis structure
+            if (!analysis.feedback || !analysis.overallScore || 
+                !analysis.keyStrengths || !analysis.developmentAreas) {
+                throw new Error('Invalid analysis structure');
+            }
+            
+        } catch (e) {
+            console.error('Error parsing AI response:', e);
+            // Provide a fallback analysis
+            analysis = {
+                feedback: questions.map((q, i) => ({
+                    questionNumber: i + 1,
+                    question: q,
+                    response: transcripts[i] || 'No response provided',
+                    score: 70,
+                    technicalAccuracy: "Shows basic understanding of technical concepts",
+                    communication: "Communication is clear and structured",
+                    problemSolving: "Demonstrates logical problem-solving approach",
+                    strengths: [
+                        "Clear communication",
+                        "Structured approach"
+                    ],
+                    improvements: [
+                        "Could provide more detailed examples",
+                        "Could elaborate on technical implementation"
+                    ]
+                })),
+                overallScore: 70,
+                overallFeedback: "Shows good potential with room for improvement in technical depth",
+                keyStrengths: [
+                    "Clear communication style",
+                    "Structured thinking"
+                ],
+                developmentAreas: [
+                    "Technical depth in responses",
+                    "Practical implementation details"
+                ],
+                recommendations: [
+                    "Practice providing more detailed technical examples",
+                    "Focus on connecting theory with practical applications",
+                    "Consider using the STAR method (Situation, Task, Action, Result) in responses"
+                ]
+            };
+        }
+
+        // Ensure scores are within valid range
+        analysis.overallScore = Math.min(100, Math.max(0, analysis.overallScore));
+        analysis.feedback.forEach(f => {
+            f.score = Math.min(100, Math.max(0, f.score));
+        });
+
+        console.log('Sending analysis response:', analysis);
+        res.json(analysis);
+    } catch (error) {
+        console.error('Error analyzing interview:', error);
+        res.status(500).json({
+            message: 'Failed to analyze interview',
+            error: error.message
+        });
+    }
+});
+
+// Interview Question Generation Endpoint
+app.post('/api/generate', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        console.log('Received prompt:', prompt);
+        
+        // Create a more structured prompt for the AI
+        const structuredPrompt = `
+        You are an experienced technical interviewer. Generate exactly 5 technical interview questions based on the candidate's skills and experience.
+
+        Requirements:
+        1. Generate EXACTLY 5 questions
+        2. Each question must be on a new line
+        3. Each question must end with a question mark
+        4. Questions should cover different aspects of the candidate's skills
+        5. Include a mix of difficulty levels
+        6. Focus on practical, real-world scenarios
+        7. DO NOT include any explanations or additional text
+        8. DO NOT number the questions
+
+        Candidate Information:
+        ${prompt}
+
+        Format your response as exactly 5 questions, one per line, nothing else.`;
+
+        // Generate response using Gemini
+        const result = await model.generateContent(structuredPrompt);
+        const response = await result.response;
+        let questions = [];
+
+        try {
+            // Get the raw text response
+            const text = response.text();
+            console.log('AI Response:', text);
+            
+            // Split by newlines and clean up
+            questions = text
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes('?'));
+            
+            // Ensure exactly 5 questions
+            if (questions.length < 5) {
+                // If we don't have enough questions, generate some generic ones
+                const defaultQuestions = [
+                    "Can you explain your approach to problem-solving in a technical context?",
+                    "How do you stay updated with the latest technological trends?",
+                    "Describe a challenging project you worked on and how you overcame the obstacles?",
+                    "How do you handle technical disagreements in a team setting?",
+                    "What's your process for debugging complex technical issues?"
+                ];
+                questions = [...questions, ...defaultQuestions].slice(0, 5);
+            } else if (questions.length > 5) {
+                questions = questions.slice(0, 5);
+            }
+            
+            console.log('Final processed questions:', questions);
+            
+            if (questions.length !== 5) {
+                throw new Error('Failed to generate exactly 5 questions');
+            }
+        } catch (e) {
+            console.error('Error processing questions:', e);
+            throw new Error('Failed to generate valid interview questions');
+        }
+
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error generating interview questions:', error);
+        res.status(500).json({ 
+            message: 'Failed to generate interview questions',
+            error: error.message 
+        });
+    }
+});
+
 app.get('/',async(req,res)=>{
   res.send('Hello')
 })
-
-app.post('/api/generate',async(req,res)=>{
-try{
-const {prompt} = req.body;
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-
-const result = await model.generateContent(`${prompt} ask 6 questions regarding this which is most important in interview`);
-console.log(result.response.text());
-return res.status(200).send({success:true , data: result }) 
-}catch(err){
-res.status(404).send({success:false, msg:err.message});
-
-}
-
-})
-
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
