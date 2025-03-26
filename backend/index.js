@@ -522,14 +522,14 @@ app.post('/api/generate', async (req, res) => {
         
         // Create a more structured prompt for the AI
         const structuredPrompt = `
-        You are an experienced technical interviewer. Generate exactly 5 technical interview questions based on the candidate's skills and experience.
+        You are an experienced technical interviewer. Generate exactly 5 technical Basic  interview questions based on the candidate's skills and experience.
 
         Requirements:
         1. Generate EXACTLY 5 questions
         2. Each question must be on a new line
         3. Each question must end with a question mark
         4. Questions should cover different aspects of the candidate's skills
-        5. Include a mix of difficulty levels
+        5. Include basic levels
         6. Focus on practical, real-world scenarios
         7. DO NOT include any explanations or additional text
         8. DO NOT number the questions

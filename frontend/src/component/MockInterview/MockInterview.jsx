@@ -503,9 +503,6 @@ const MockInterview = () => {
                                             </div>
                                         ))}
                                     </div>
-                                    <div>
-                                        <Mic />
-                                    </div>
                                 </div>
                             )}
 
@@ -582,11 +579,13 @@ const MockInterview = () => {
 
                                     <div className="grid grid-cols-3 gap-6">
                                         <div className="col-span-2">
-                                            <video
-                                                ref={videoRef}
+                                            <video  
+                                                src={'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4'}
                                                 autoPlay
                                                 playsInline
                                                 muted
+                                                loop={true}
+        
                                                 className="w-full h-96 bg-black rounded-lg"
                                             />
                                             <div className="mt-4 flex justify-center space-x-4">
