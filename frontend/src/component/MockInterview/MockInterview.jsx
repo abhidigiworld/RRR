@@ -37,6 +37,9 @@ const MockInterview = () => {
     const [transcripts, setTranscripts] = useState([]);
     const [recognition, setRecognition] = useState(null);
     const [currentTranscript, setCurrentTranscript] = useState('');
+    const [isSpeechDetected, setIsSpeechDetected] = useState(false);
+    const [transcriptionConfidence, setTranscriptionConfidence] = useState(0);
+    const [speechError, setSpeechError] = useState(null);
 
     const videoRef = useRef(null);
     const mediaRecorderRef = useRef(null);
@@ -70,30 +73,76 @@ const MockInterview = () => {
 
     useEffect(() => {
         // Initialize speech recognition
-        if ('webkitSpeechRecognition' in window) {
-            const recognition = new window.webkitSpeechRecognition();
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
 
+            recognition.onstart = () => {
+                setSpeechError(null);
+                setIsSpeechDetected(false);
+            };
+
             recognition.onresult = (event) => {
-                let transcript = '';
+                let interimTranscript = '';
+                let finalTranscript = '';
+                let maxConfidence = 0;
+
                 for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    const confidence = event.results[i][0].confidence;
+                    
                     if (event.results[i].isFinal) {
-                        transcript += event.results[i][0].transcript;
+                        finalTranscript += transcript;
+                        maxConfidence = Math.max(maxConfidence, confidence);
+                    } else {
+                        interimTranscript += transcript;
                     }
                 }
-                setCurrentTranscript(prev => prev + ' ' + transcript);
+
+                if (finalTranscript) {
+                    setCurrentTranscript(prev => prev + ' ' + finalTranscript.trim());
+                    setTranscriptionConfidence(maxConfidence * 100);
+                }
+                
+                if (interimTranscript) {
+                    setIsSpeechDetected(true);
+                }
             };
 
             recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
+                setSpeechError(event.error);
+                setIsSpeechDetected(false);
                 stopRecording();
+            };
+
+            recognition.onend = () => {
+                setIsSpeechDetected(false);
+                // Auto restart if still recording
+                if (isRecording) {
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        console.error('Error restarting recognition:', error);
+                    }
+                }
+            };
+
+            recognition.onsoundstart = () => {
+                setIsSpeechDetected(true);
+            };
+
+            recognition.onsoundend = () => {
+                setIsSpeechDetected(false);
             };
 
             setRecognition(recognition);
         } else {
-            alert('Speech recognition is not supported in your browser. Please use Chrome.');
+            setSpeechError('Speech recognition is not supported in your browser. Please use Chrome.');
         }
 
         return () => {
@@ -101,7 +150,7 @@ const MockInterview = () => {
                 recognition.stop();
             }
         };
-    }, []);
+    }, [isRecording]);
 
     const startRecording = async () => {
         try {
@@ -194,6 +243,7 @@ const MockInterview = () => {
     };
 
     // Camera functionality
+    // Camera functionality
     const toggleCamera = async () => {
         try {
             if (!isCameraOn) {
@@ -244,7 +294,6 @@ const MockInterview = () => {
             setIsCameraOn(false);
         }
     };
-
     // Microphone functionality
     const toggleMicrophone = async () => {
         try {
@@ -448,10 +497,10 @@ const MockInterview = () => {
     return (
         <>
             <Header />
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-4xl mx-auto">
+            <div className="min-h-screen bg-gray-100">
+                <div className="container mx-auto px-4 py-8">
                     {!isInterviewStarted ? (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-xl p-8">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-lg p-8">
                             <h1 className="text-3xl font-bold text-center mb-8">AI Mock Interview</h1>
 
                             <div className="mb-8">
@@ -533,7 +582,8 @@ const MockInterview = () => {
                                     autoPlay
                                     playsInline
                                     muted
-                                    className={`w-full h-64 bg-black rounded-lg ${!isCameraOn && 'hidden'}`}
+                                    style={{ display: isCameraOn ? 'block' : 'none' }}
+                                    className="w-full h-64 bg-black rounded-lg"
                                 />
                             </div>
 
@@ -558,7 +608,7 @@ const MockInterview = () => {
                             overallFeedback={interviewResults?.overallFeedback || ''}
                         />
                     ) : (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-xl p-8">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-lg p-8">
                             {isAnalyzing ? (
                                 <div className="text-center py-12">
                                     <FaRobot className="text-5xl text-blue-600 mx-auto animate-bounce" />
@@ -616,6 +666,42 @@ const MockInterview = () => {
                                         </div>
                                     </div>
                                     {renderTranscriptSection()}
+                                    <div className="mt-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center space-x-4">
+                                                <button
+                                                    onClick={() => setIsMicOn(!isMicOn)}
+                                                    className={`p-2 rounded-full ${isMicOn ? 'bg-green-500' : 'bg-red-500'} text-white`}
+                                                >
+                                                    {isMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                                                </button>
+                                                {/* Speech recognition status */}
+                                                {isMicOn && (
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className={`w-3 h-3 rounded-full ${isSpeechDetected ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                        <span className="text-sm text-gray-600">
+                                                            {isSpeechDetected ? 'Listening...' : 'No speech detected'}
+                                                        </span>
+                                                        {transcriptionConfidence > 0 && (
+                                                            <span className="text-sm text-gray-500">
+                                                                Confidence: {Math.round(transcriptionConfidence)}%
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {speechError && (
+                                                <div className="text-red-500 text-sm mb-2">
+                                                    Error: {speechError}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Current transcript display */}
+                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                                            <h3 className="text-lg font-semibold mb-2">Your Response:</h3>
+                                            <p className="text-gray-700">{currentTranscript || 'Start speaking to see your response...'}</p>
+                                        </div>
+                                    </div>
                                 </>
                             )}
                         </motion.div>

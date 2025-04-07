@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true }
 });
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('User1', userSchema);
 
 // Resume Schema
 const resumeSchema = new mongoose.Schema({
@@ -81,7 +81,7 @@ const resumeSchema = new mongoose.Schema({
   }]
 });
 
-const Resume = mongoose.model('Resume', resumeSchema);
+const Resume = mongoose.model('Resume1', resumeSchema);
 
 // Add OTP Schema
 const otpSchema = new mongoose.Schema({
@@ -90,7 +90,7 @@ const otpSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: 300 } // OTP expires in 5 minutes
 });
 
-const OTP = mongoose.model('OTP', otpSchema);
+const OTP = mongoose.model('OTP1', otpSchema);
 
 // Configure nodemailer
 const transporter = nodemailer.createTransport({
@@ -397,7 +397,9 @@ app.post('/api/analyze-interview', async (req, res) => {
         const { transcripts, questions } = req.body;
         console.log('Received analysis request:', { 
             questionsCount: questions?.length,
-            transcriptsCount: transcripts?.length 
+            transcriptsCount: transcripts?.length,
+            questions,
+            transcripts
         });
 
         if (!transcripts || !questions || transcripts.length !== questions.length) {
@@ -405,35 +407,48 @@ app.post('/api/analyze-interview', async (req, res) => {
         }
 
         const analysisPrompt = `
-        You are an expert technical interviewer. Analyze these interview responses.
+        You are an expert technical interviewer. Analyze these interview responses carefully and provide detailed, constructive feedback.
         
         Questions and Answers:
         ${questions.map((q, i) => `
-        Question: ${q}
-        Answer: ${transcripts[i] || 'No response provided'}
+        Question ${i + 1}: ${q}
+        Candidate's Answer: ${transcripts[i] || 'No response provided'}
         `).join('\n\n')}
         
-        Provide a JSON response in this EXACT format (do not include any other text):
+        Analyze each response considering:
+        1. Technical Accuracy: Evaluate the correctness and depth of technical knowledge
+        2. Communication: Assess clarity, structure, and effectiveness of communication
+        3. Problem-Solving: Evaluate the approach, methodology, and critical thinking
+        
+        Provide a detailed analysis in this exact JSON format (include specific examples from their answers):
         {
             "feedback": [
                 {
-                    "questionNumber": 1,
-                    "question": "question text",
-                    "response": "answer text",
-                    "score": 75,
-                    "technicalAccuracy": "feedback on technical accuracy",
-                    "communication": "feedback on communication",
-                    "problemSolving": "feedback on approach",
-                    "strengths": ["strength 1", "strength 2"],
-                    "improvements": ["improvement 1", "improvement 2"]
-                }
+                    "questionNumber": <number>,
+                    "question": "<question text>",
+                    "response": "<candidate's response>",
+                    "score": <number 0-100>,
+                    "technicalAccuracy": "<specific feedback on technical accuracy with examples>",
+                    "communication": "<specific feedback on communication style>",
+                    "problemSolving": "<specific feedback on problem-solving approach>",
+                    "strengths": ["<specific strength with example>", ...],
+                    "improvements": ["<specific area to improve with suggestion>", ...]
+                },
+                ...
             ],
-            "overallScore": 80,
-            "overallFeedback": "overall performance feedback",
-            "keyStrengths": ["key strength 1", "key strength 2"],
-            "developmentAreas": ["area 1", "area 2"],
-            "recommendations": ["recommendation 1", "recommendation 2"]
-        }`;
+            "overallScore": <number 0-100>,
+            "overallFeedback": "<comprehensive evaluation of performance>",
+            "keyStrengths": ["<key strength with specific example>", ...],
+            "developmentAreas": ["<specific area to develop with example>", ...],
+            "recommendations": ["<actionable recommendation>", ...]
+        }
+
+        Important:
+        - Provide specific examples from their responses
+        - Be constructive and actionable in feedback
+        - Score based on technical accuracy (40%), communication (30%), and problem-solving (30%)
+        - Ensure all feedback is detailed and helpful
+        `;
 
         console.log('Sending analysis prompt to AI...');
         const result = await model.generateContent(analysisPrompt);
@@ -457,47 +472,65 @@ app.post('/api/analyze-interview', async (req, res) => {
                 !analysis.keyStrengths || !analysis.developmentAreas) {
                 throw new Error('Invalid analysis structure');
             }
+
+            // Validate and clean up each feedback item
+            analysis.feedback = analysis.feedback.map((item, index) => ({
+                ...item,
+                questionNumber: index + 1,
+                question: questions[index],
+                response: transcripts[index] || 'No response provided',
+                score: Math.min(100, Math.max(0, item.score)),
+                strengths: Array.isArray(item.strengths) ? item.strengths : [],
+                improvements: Array.isArray(item.improvements) ? item.improvements : []
+            }));
+
+            // Ensure all required arrays exist
+            analysis.keyStrengths = Array.isArray(analysis.keyStrengths) ? analysis.keyStrengths : [];
+            analysis.developmentAreas = Array.isArray(analysis.developmentAreas) ? analysis.developmentAreas : [];
+            analysis.recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
+
+            // Calculate overall score if not provided or invalid
+            if (!analysis.overallScore || isNaN(analysis.overallScore)) {
+                analysis.overallScore = Math.round(
+                    analysis.feedback.reduce((sum, item) => sum + item.score, 0) / analysis.feedback.length
+                );
+            }
             
         } catch (e) {
             console.error('Error parsing AI response:', e);
-            // Provide a fallback analysis
-            analysis = {
-                feedback: questions.map((q, i) => ({
-                    questionNumber: i + 1,
-                    question: q,
-                    response: transcripts[i] || 'No response provided',
-                    score: 70,
-                    technicalAccuracy: "Shows basic understanding of technical concepts",
-                    communication: "Communication is clear and structured",
-                    problemSolving: "Demonstrates logical problem-solving approach",
-                    strengths: [
-                        "Clear communication",
-                        "Structured approach"
-                    ],
-                    improvements: [
-                        "Could provide more detailed examples",
-                        "Could elaborate on technical implementation"
-                    ]
-                })),
-                overallScore: 70,
-                overallFeedback: "Shows good potential with room for improvement in technical depth",
-                keyStrengths: [
-                    "Clear communication style",
-                    "Structured thinking"
-                ],
-                developmentAreas: [
-                    "Technical depth in responses",
-                    "Practical implementation details"
-                ],
-                recommendations: [
-                    "Practice providing more detailed technical examples",
-                    "Focus on connecting theory with practical applications",
-                    "Consider using the STAR method (Situation, Task, Action, Result) in responses"
-                ]
-            };
+            // Try one more time with a simplified prompt
+            try {
+                const retryPrompt = `
+                Analyze these interview responses and provide feedback in JSON format:
+                ${questions.map((q, i) => `Q: ${q}\nA: ${transcripts[i]}`).join('\n\n')}
+                
+                Return ONLY a JSON object with this structure:
+                {
+                    "feedback": [{"questionNumber": 1, "score": 70, ...}],
+                    "overallScore": 70,
+                    "overallFeedback": "...",
+                    "keyStrengths": ["..."],
+                    "developmentAreas": ["..."],
+                    "recommendations": ["..."]
+                }`;
+
+                const retryResult = await model.generateContent(retryPrompt);
+                const retryResponse = await retryResult.response;
+                const retryText = retryResponse.text();
+                const retryJson = retryText.match(/\{[\s\S]*\}/);
+                
+                if (retryJson) {
+                    analysis = JSON.parse(retryJson[0]);
+                } else {
+                    throw new Error('Retry failed to generate valid JSON');
+                }
+            } catch (retryError) {
+                console.error('Retry failed:', retryError);
+                throw new Error('Failed to generate interview analysis after retry');
+            }
         }
 
-        // Ensure scores are within valid range
+        // Final validation and cleanup
         analysis.overallScore = Math.min(100, Math.max(0, analysis.overallScore));
         analysis.feedback.forEach(f => {
             f.score = Math.min(100, Math.max(0, f.score));
