@@ -24,6 +24,7 @@
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
     "pdf-lib": "^1.17.1",
-    "pizzip": "^3.1.8"
+    "pizzip": "^3.1.8",
+    "puppeteer": "^22.15.0"
   }
 }

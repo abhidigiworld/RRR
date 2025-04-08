@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const puppeteer = require('puppeteer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -350,6 +351,163 @@ app.post('/api/resume/save', async (req, res) => {
     res.status(500).json({ message: 'Error saving resume' });
   }
 });
+
+app.post('/api/resume/download', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            console.log('No token provided');
+            return res.status(401).json({ message: 'No token provided' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
+
+        // Get the resume data from request body instead of DB
+        const { formData, template } = req.body;
+        if (!formData) {
+            return res.status(400).json({ message: 'No resume data provided' });
+        }
+
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            headless: true
+        });
+        const page = await browser.newPage();
+
+        // Generate HTML content based on received formData
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Resume</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        max-width: 800px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }
+                    h1 { color: #333; }
+                    .section { margin-bottom: 20px; }
+                    .section-title { 
+                        color: #2563eb;
+                        border-bottom: 2px solid #2563eb;
+                        padding-bottom: 5px;
+                        margin-bottom: 10px;
+                    }
+                    .contact-info { text-align: center; margin-bottom: 20px; }
+                    .skills-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+                    .item { margin-bottom: 15px; }
+                    .dates { color: #666; font-style: italic; }
+                </style>
+            </head>
+            <body>
+                <div class="contact-info">
+                    <h1>${formData.personal.fullName || ''}</h1>
+                    <p>
+                        ${formData.personal.email || ''} | 
+                        ${formData.personal.phone || ''} | 
+                        ${formData.personal.location || ''}
+                    </p>
+                    <p>
+                        ${formData.personal.github ? 'GitHub: ' + formData.personal.github : ''} 
+                        ${formData.personal.linkedin ? '| LinkedIn: ' + formData.personal.linkedin : ''}
+                    </p>
+                </div>
+
+                ${formData.technicalSkills && (formData.technicalSkills.languages || formData.technicalSkills.technologies || formData.technicalSkills.skills) ? `
+                <div class="section">
+                    <h2 class="section-title">Technical Skills</h2>
+                    <div class="skills-grid">
+                        ${formData.technicalSkills.languages ? `<div><strong>Languages:</strong> ${formData.technicalSkills.languages}</div>` : ''}
+                        ${formData.technicalSkills.technologies ? `<div><strong>Technologies:</strong> ${formData.technicalSkills.technologies}</div>` : ''}
+                        ${formData.technicalSkills.skills ? `<div><strong>Skills:</strong> ${formData.technicalSkills.skills}</div>` : ''}
+                    </div>
+                </div>` : ''}
+
+                ${formData.training?.length > 0 ? `
+                <div class="section">
+ Shuttleworth                    <h2 class="section-title">Experience</h2>
+                    ${formData.training.map(exp => `
+                        <div class="item">
+                            <strong>${exp.company || ''} - ${exp.position || ''}</strong>
+                            <div class="dates">${exp.duration || ''}</div>
+                            <ul>
+                                ${exp.points?.map(point => `<li>${point}</li>`).join('') || ''}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.projects?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Projects</h2>
+                    ${formData.projects.map(proj => `
+                        <div class="item">
+                            <strong>${proj.title || ''}</strong> ${proj.githubLink ? `(<a href="${proj.githubLink}">${proj.githubLink}</a>)` : ''}
+                            <div class="dates">${proj.duration || ''}</div>
+                            <div>Technologies: ${proj.technologies || ''}</div>
+                            <ul>
+                                ${proj.points?.map(point => `<li>${point}</li>`).join('') || ''}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.education?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Education</h2>
+                    ${formData.education.map(edu => `
+                        <div class="item">
+                            <strong>${edu.institution || ''} - ${edu.degree || ''}</strong>
+                            <div class="dates">${edu.duration || ''}</div>
+                            <div>${edu.location || ''}</div>
+                            <div>${edu.details || ''}</div>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.certifications?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Certifications</h2>
+                    ${formData.certifications.map(cert => `
+                        <div class="item">
+                            <strong>${cert.title || ''}</strong> ${cert.certificateLink ? `(<a href="${cert.certificateLink}">${cert.certificateLink}</a>)` : ''}
+                            <div>${cert.platform || ''} - ${cert.date || ''}</div>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+            </body>
+            </html>
+        `;
+
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        const pdfBuffer = await page.pdf({ 
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+        });
+
+        await browser.close();
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename=resume.pdf',
+            'Content-Length': pdfBuffer.length
+        });
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        res.status(500).json({ 
+            message: 'Error generating PDF',
+            error: error.message 
+        });
+    }
+});
+
 
 // Fetch Resume Endpoint
 app.get('/api/resume/fetch', async (req, res) => {
