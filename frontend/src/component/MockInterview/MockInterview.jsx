@@ -1,360 +1,709 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { FaMicrophone, FaVideo, FaCog, FaRegClock, FaRobot, FaFileUpload, FaFilePdf, FaFileWord, FaTimes } from 'react-icons/fa';
-import Header from '../Header';
-import Footer from '../Footer';
+import React, { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
+import { FaMicrophone, FaVideo, FaCog, FaRegClock, FaRobot, FaFileUpload, FaFilePdf, FaFileWord, FaTimes, FaMicrophoneSlash, FaVideoSlash } from "react-icons/fa";
+import Header from "../Header";
+import Footer from "../Footer";
+import axios from 'axios';
+import Mic from "../Mice/Mic";
+import InterviewResult from "./InterviewResult";
 
 const DetectedSkill = {
-    STRONG: 'strong',
-    MODERATE: 'moderate',
-    BASIC: 'basic'
+    STRONG: "strong",
+    MODERATE: "moderate",
+    BASIC: "basic",
 };
 
 const MockInterview = () => {
-    const [difficulty, setDifficulty] = useState('medium');
+    const [difficulty, setDifficulty] = useState("medium");
     const [isInterviewStarted, setIsInterviewStarted] = useState(false);
     const [isCameraOn, setIsCameraOn] = useState(false);
     const [isMicOn, setIsMicOn] = useState(false);
     const [resumeFile, setResumeFile] = useState(null);
-    const [uploadError, setUploadError] = useState('');
+    const [uploadError, setUploadError] = useState("");
     const [detectedTopics, setDetectedTopics] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [promt, setpromt] = useState([]);
+    const [skillloading, setskillloading] = useState(false);
+    const [currentQuestion, setCurrentQuestion] = useState("");
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [questions, setQuestions] = useState([]);
+    const [timeRemaining, setTimeRemaining] = useState(60);
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
+    const [audioRecordings, setAudioRecordings] = useState([]);
+    const [isRecording, setIsRecording] = useState(false);
+    const [interviewComplete, setInterviewComplete] = useState(false);
+    const [interviewResults, setInterviewResults] = useState(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [transcripts, setTranscripts] = useState([]);
+    const [recognition, setRecognition] = useState(null);
+    const [currentTranscript, setCurrentTranscript] = useState('');
+    const [isSpeechDetected, setIsSpeechDetected] = useState(false);
+    const [transcriptionConfidence, setTranscriptionConfidence] = useState(0);
+    const [speechError, setSpeechError] = useState(null);
+
+    const videoRef = useRef(null);
+    const mediaRecorderRef = useRef(null);
+    const streamRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const baseUrl = "http://localhost:3001/";
+
     const [parsedResumeData, setParsedResumeData] = useState({
         skills: [],
         experience: [],
         projects: [],
-        detectedTopics: []
     });
 
-    const topics = [
-        'Data Structures & Algorithms',
-        'React.js',
-        'Node.js',
-        'System Design',
-        'JavaScript',
-        'Python',
-        'Java',
-        'Full Stack Development',
-        'Database Management'
-    ];
+    // Timer functionality
+    useEffect(() => {
+        let interval;
+        if (isTimerRunning && timeRemaining > 0) {
+            interval = setInterval(() => {
+                setTimeRemaining((prev) => prev - 1);
+            }, 1000);
+        } else if (timeRemaining === 0) {
+            stopRecording();
+            if (currentQuestionIndex < questions.length - 1) {
+                moveToNextQuestion();
+            } else {
+                finishInterview();
+            }
+        }
+        return () => clearInterval(interval);
+    }, [isTimerRunning, timeRemaining, currentQuestionIndex, questions]);
 
-    const analyzeResume = async (file) => {
-        // This will be replaced with actual API call later
-        // Simulating resume parsing for now
-        const mockParsedData = {
-            skills: [
-                { name: 'React.js', level: DetectedSkill.STRONG, subtopics: ['Hooks', 'Redux', 'Context API'] },
-                { name: 'Node.js', level: DetectedSkill.STRONG, subtopics: ['Express', 'REST APIs', 'MongoDB'] },
-                { name: 'JavaScript', level: DetectedSkill.MODERATE, subtopics: ['ES6+', 'Async/Await', 'DOM'] },
-                { name: 'System Design', level: DetectedSkill.BASIC, subtopics: ['APIs', 'Database Design'] }
-            ],
-            experience: [
-                'Web Development',
-                'Full Stack Development',
-                'Database Management'
-            ],
-            projects: [
-                'E-commerce Platform',
-                'Social Media App',
-                'Testing Platform'
-            ]
+    useEffect(() => {
+        // Initialize speech recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                setSpeechError(null);
+                setIsSpeechDetected(false);
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                let maxConfidence = 0;
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    const confidence = event.results[i][0].confidence;
+                    
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                        maxConfidence = Math.max(maxConfidence, confidence);
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    setCurrentTranscript(prev => prev + ' ' + finalTranscript.trim());
+                    setTranscriptionConfidence(maxConfidence * 100);
+                }
+                
+                if (interimTranscript) {
+                    setIsSpeechDetected(true);
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                setSpeechError(event.error);
+                setIsSpeechDetected(false);
+                stopRecording();
+            };
+
+            recognition.onend = () => {
+                setIsSpeechDetected(false);
+                // Auto restart if still recording
+                if (isRecording) {
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        console.error('Error restarting recognition:', error);
+                    }
+                }
+            };
+
+            recognition.onsoundstart = () => {
+                setIsSpeechDetected(true);
+            };
+
+            recognition.onsoundend = () => {
+                setIsSpeechDetected(false);
+            };
+
+            setRecognition(recognition);
+        } else {
+            setSpeechError('Speech recognition is not supported in your browser. Please use Chrome.');
+        }
+
+        return () => {
+            if (recognition) {
+                recognition.stop();
+            }
         };
+    }, [isRecording]);
 
-        setParsedResumeData(mockParsedData);
-        setDetectedTopics(mockParsedData.skills.map(skill => skill.name));
+    const startRecording = async () => {
+        try {
+            if (recognition) {
+                setCurrentTranscript('');
+                recognition.start();
+                setIsRecording(true);
+            }
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            alert('Unable to start recording. Please check microphone permissions.');
+        }
     };
 
-    const handleFileUpload = (event) => {
+    const stopRecording = () => {
+        if (recognition && isRecording) {
+            recognition.stop();
+            setIsRecording(false);
+            // Save the transcript for this question
+            setTranscripts(prev => [...prev, currentTranscript.trim()]);
+            setCurrentTranscript('');
+        }
+    };
+
+    const moveToNextQuestion = () => {
+        stopRecording();
+        setCurrentQuestionIndex(prev => prev + 1);
+        setCurrentQuestion(questions[currentQuestionIndex + 1]);
+        setTimeRemaining(60);
+        startRecording();
+    };
+
+    const finishInterview = async () => {
+        // Stop recording and timer
+        stopRecording();
+        setIsTimerRunning(false);
+        setIsAnalyzing(true);
+
+        // Turn off camera
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => {
+                track.stop();
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = null;
+            }
+            setIsCameraOn(false);
+        }
+
+        // Turn off microphone
+        setIsMicOn(false);
+
+        try {
+            console.log('Preparing to analyze interview...');
+            console.log('Questions:', questions);
+            console.log('Transcripts:', transcripts);
+
+            // Ensure we have transcripts for all questions
+            const allTranscripts = questions.map((_, index) => {
+                return transcripts[index] || "No response provided";
+            });
+
+            console.log('Sending request to analyze interview...');
+            const response = await axios.post(`${baseUrl}api/analyze-interview`, {
+                transcripts: allTranscripts,
+                questions
+            });
+
+            console.log('Received analysis response:', response.data);
+
+            if (response.data) {
+                setInterviewResults(response.data);
+                setInterviewComplete(true);
+            } else {
+                throw new Error('No data received from server');
+            }
+        } catch (error) {
+            console.error('Error analyzing interview:', error);
+            alert('Failed to analyze interview responses: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    // Format time for display
+    const formatTime = (seconds) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
+
+    // Camera functionality
+    // Camera functionality
+    const toggleCamera = async () => {
+        try {
+            if (!isCameraOn) {
+                console.log('Attempting to access camera...');
+                const constraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (!videoRef.current) {
+                    console.error('Video ref is not available');
+                    return;
+                }
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current.play().catch(e => console.error('Error playing video:', e));
+                };
+                streamRef.current = stream;
+                setIsCameraOn(true);
+                console.log('Camera successfully enabled');
+            } else {
+                if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(track => {
+                        track.stop();
+                        console.log('Camera track stopped');
+                    });
+                }
+                if (videoRef.current) {
+                    videoRef.current.srcObject = null;
+                }
+                setIsCameraOn(false);
+                console.log('Camera successfully disabled');
+            }
+        } catch (error) {
+            console.error('Camera error:', error.name, error.message);
+            if (error.name === 'NotAllowedError') {
+                alert('Camera access was denied. Please check your browser permissions and make sure camera access is allowed.');
+            } else if (error.name === 'NotFoundError') {
+                alert('No camera device was found. Please make sure your camera is properly connected.');
+            } else if (error.name === 'NotReadableError') {
+                alert('Your camera might be in use by another application. Please close other apps that might be using the camera.');
+            } else {
+                alert(`Unable to access camera: ${error.message}`);
+            }
+            setIsCameraOn(false);
+        }
+    };
+    // Microphone functionality
+    const toggleMicrophone = async () => {
+        try {
+            if (!isMicOn) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorderRef.current = new MediaRecorder(stream);
+                setIsMicOn(true);
+            } else {
+                if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                    mediaRecorderRef.current.stop();
+                }
+                setIsMicOn(false);
+            }
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            alert('Unable to access microphone. Please check permissions.');
+        }
+    };
+
+    // Generate interview questions based on resume
+    const generateQuestions = async (skills, experience, projects) => {
+        try {
+            // Safely format the skills and experience data
+            const skillsText = Array.isArray(skills) ? skills.join(', ') : '';
+            const experienceText = Array.isArray(experience) ?
+                experience.map(exp => exp.title || exp.position || exp.role || '').filter(Boolean).join(', ') : '';
+            const projectsText = Array.isArray(projects) ?
+                projects.map(proj => proj.title || proj.name || '').filter(Boolean).join(', ') : '';
+
+            const prompt = `Generate 5 technical interview questions based on the following skills and experience:
+                Skills: ${skillsText || 'General technical skills'}
+                Experience: ${experienceText || 'General professional experience'}
+                Projects: ${projectsText || 'General project experience'}`;
+
+            console.log('Sending prompt to generate questions:', prompt);
+
+            const response = await axios.post(`${baseUrl}api/generate`, { prompt });
+            console.log('Response from question generation:', response.data);
+
+            if (!response.data || !response.data.questions) {
+                throw new Error('No questions received from the server');
+            }
+
+            const generatedQuestions = response.data.questions;
+
+            // Ensure we only use 5 questions
+            const limitedQuestions = generatedQuestions.slice(0, 5);
+            setQuestions(limitedQuestions);
+            if (limitedQuestions.length > 0) {
+                setCurrentQuestion(limitedQuestions[0]);
+                setCurrentQuestionIndex(0);
+            } else {
+                throw new Error('No valid questions were generated');
+            }
+        } catch (error) {
+            console.error('Error generating questions:', error);
+            alert('Failed to generate interview questions: ' + (error.response?.data?.message || error.message));
+            throw error;
+        }
+    };
+
+    const startInterview = async () => {
+        if (!resumeFile) {
+            alert("Please upload your resume first");
+            return;
+        }
+
+        if (!parsedResumeData || !parsedResumeData.skills || parsedResumeData.skills.length === 0) {
+            alert("Please wait for resume analysis to complete");
+            return;
+        }
+
+        try {
+            await generateQuestions(
+                parsedResumeData.skills.map(skill => skill.name),
+                parsedResumeData.experience || [],
+                parsedResumeData.projects || []
+            );
+            setIsInterviewStarted(true);
+            setIsTimerRunning(true);
+            startRecording();
+        } catch (err) {
+            console.error('Error starting interview:', err);
+            alert('Failed to start interview. Please try again.');
+        }
+    };
+
+    const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         const fileType = file?.type;
-        
-        setUploadError('');
+        setskillloading(true)
+        setUploadError("");
+        if (!file) return;
 
-        if (fileType !== 'application/pdf' && 
-            fileType !== 'application/msword' && 
-            fileType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            setUploadError('Please upload a PDF or DOC/DOCX file');
+        if (fileType !== "application/pdf" && fileType !== "application/msword" && fileType !== "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+            setUploadError("Please upload a PDF or DOC/DOCX file");
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            setUploadError('File size should be less than 5MB');
+            setUploadError("File size should be less than 5MB");
             return;
         }
 
         setResumeFile(file);
-        analyzeResume(file);
+        setIsLoading(true);
+        await analyzeResume(file);
+        setIsLoading(false);
+        setskillloading(false);
+    };
+
+    const uploadFileToCloud = async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", "Ashton"); // Replace with your Cloudinary preset
+        formData.append("resource_type", "raw");
+
+        try {
+            const response = await fetch("https://api.cloudinary.com/v1_1/dwvnq0gjr/raw/upload"
+                , {
+                    method: "POST",
+                    body: formData,
+                });
+
+            const data = await response.json();
+            console.log(data.secure_url);
+            return data.secure_url; // Cloudinary returns a secure file URL
+        } catch (err) {
+            console.error("File Upload Error:", err);
+            return null;
+        }
+    };
+
+    const analyzeResume = async (file) => {
+        if (!file) return;
+
+        // Upload to Cloudinary and get a URL
+        const fileUrl = await uploadFileToCloud(file);
+        if (!fileUrl) {
+            setUploadError("Failed to upload resume. Please try again.");
+            return;
+        }
+
+        const API_KEY = "2e34q1Zpa9wcSq0YKHF1ZQK5o87E2Pzc"; // Replace with actual APILayer API Key
+        try {
+            const response = await fetch(`https://api.apilayer.com/resume_parser/url?url=${encodeURIComponent(fileUrl)}`, {
+                method: "GET",
+                headers: {
+                    apikey: API_KEY,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error: ${response.status} - ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            const formattedData = {
+                skills: data.skills?.map((skill) => ({
+                    name: skill,
+                    level: DetectedSkill.MODERATE, // Modify logic to determine level
+                    subtopics: [],
+                })) || [],
+                experience: data.experience || [],
+                projects: data.projects || [],
+            };
+            setParsedResumeData(formattedData);
+            setDetectedTopics(formattedData.skills.map((skill) => skill.name));
+        } catch (err) {
+            setUploadError("Failed to analyze resume. Please try again.");
+            console.error("Resume Parsing Error:", err);
+        }
     };
 
     const removeFile = () => {
         setResumeFile(null);
-        setUploadError('');
+        setUploadError("");
+        setParsedResumeData({
+            skills: []
+        })
+        setskillloading(false);
+
     };
 
-    const startInterview = () => {
-        if (!resumeFile) {
-            alert('Please upload your resume');
-            return;
-        }
-        setIsInterviewStarted(true);
-    };
+    useEffect(() => {
+        setpromt(parsedResumeData.skills.map((skill) => skill.name));
+    }, [parsedResumeData.skills]);
 
-    const SkillLevelIndicator = ({ level }) => {
-        const colors = {
-            [DetectedSkill.STRONG]: 'bg-green-500',
-            [DetectedSkill.MODERATE]: 'bg-yellow-500',
-            [DetectedSkill.BASIC]: 'bg-blue-500'
-        };
+    const renderTranscriptSection = () => {
+        if (!isInterviewStarted || interviewComplete) return null;
 
         return (
-            <span className={`px-2 py-0.5 text-xs text-white rounded-full ${colors[level]}`}>
-                {level}
-            </span>
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">Current Response:</h3>
+                <p className="text-gray-700">{currentTranscript || 'Listening...'}</p>
+            </div>
         );
     };
-
-    const detectedTopicsSection = (
-        <div className="mt-4 p-6 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Interview Topics Based on Your Resume
-            </h3>
-            
-            {/* Primary Skills */}
-            <div className="space-y-4">
-                {parsedResumeData.skills.map((skill, index) => (
-                    <div key={index} className="bg-white p-4 rounded-lg shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-gray-800">{skill.name}</h4>
-                            <SkillLevelIndicator level={skill.level} />
-                        </div>
-                        {skill.subtopics && (
-                            <div className="ml-4">
-                                <p className="text-sm text-gray-600 mb-1">Expected questions on:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {skill.subtopics.map((subtopic, idx) => (
-                                        <span
-                                            key={idx}
-                                            className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-sm"
-                                        >
-                                            {subtopic}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-
-            {/* Project Experience */}
-            {parsedResumeData.projects.length > 0 && (
-                <div className="mt-4">
-                    <h4 className="font-medium text-gray-800 mb-2">Project Discussion Topics:</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {parsedResumeData.projects.map((project, index) => (
-                            <span
-                                key={index}
-                                className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm"
-                            >
-                                {project}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-blue-800">
-                    <span className="font-semibold">Note:</span> The interview will focus on these topics, 
-                    with emphasis on your stronger areas. Questions will be tailored to your {difficulty} difficulty preference.
-                </p>
-            </div>
-        </div>
-    );
-
-    const resumeUploadSection = (
-        <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Upload Resume</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                {!resumeFile ? (
-                    <div className="text-center">
-                        <input
-                            type="file"
-                            id="resume-upload"
-                            accept=".pdf,.doc,.docx"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                        />
-                        <label
-                            htmlFor="resume-upload"
-                            className="cursor-pointer flex flex-col items-center"
-                        >
-                            <FaFileUpload className="text-4xl text-gray-400 mb-2" />
-                            <p className="text-gray-600 mb-1">
-                                Drag & drop your resume or click to upload
-                            </p>
-                            <p className="text-sm text-gray-500">
-                                Supports PDF, DOC, DOCX (Max 5MB)
-                            </p>
-                        </label>
-                    </div>
-                ) : (
-                    <>
-                        <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg">
-                            <div className="flex items-center space-x-3">
-                                {resumeFile.type === 'application/pdf' ? (
-                                    <FaFilePdf className="text-red-500 text-xl" />
-                                ) : (
-                                    <FaFileWord className="text-blue-500 text-xl" />
-                                )}
-                                <div>
-                                    <p className="font-medium">{resumeFile.name}</p>
-                                    <p className="text-sm text-gray-500">
-                                        {(resumeFile.size / (1024 * 1024)).toFixed(2)} MB
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={removeFile}
-                                className="text-gray-500 hover:text-red-500"
-                            >
-                                <FaTimes />
-                            </button>
-                        </div>
-                        {detectedTopicsSection}
-                    </>
-                )}
-                {uploadError && (
-                    <p className="text-red-500 text-sm mt-2">{uploadError}</p>
-                )}
-            </div>
-            {resumeFile && (
-                <p className="text-sm text-green-600 mt-2">
-                    ✓ Resume uploaded successfully. Your interview will be personalized based on your experience.
-                </p>
-            )}
-        </div>
-    );
 
     return (
         <>
             <Header />
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-4xl mx-auto">
+            <div className="min-h-screen bg-gray-100">
+                <div className="container mx-auto px-4 py-8">
                     {!isInterviewStarted ? (
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="bg-white rounded-lg shadow-xl p-8"
-                        >
-                            <h1 className="text-3xl font-bold text-center mb-8">
-                                AI Mock Interview
-                            </h1>
-
-                            {resumeUploadSection}
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-lg p-8">
+                            <h1 className="text-3xl font-bold text-center mb-8">AI Mock Interview</h1>
 
                             <div className="mb-8">
-                                <h2 className="text-xl font-semibold mb-4">Select Difficulty</h2>
-                                <div className="flex space-x-4">
-                                    {['easy', 'medium', 'hard'].map((level) => (
-                                        <motion.button
-                                            key={level}
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            onClick={() => setDifficulty(level)}
-                                            className={`px-6 py-3 rounded-lg capitalize ${
-                                                difficulty === level
-                                                    ? 'bg-blue-500 text-white'
-                                                    : 'bg-gray-100 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {level}
-                                        </motion.button>
-                                    ))}
+                                <h2 className="text-xl font-semibold mb-4">Upload Resume</h2>
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                                    {!resumeFile ? (
+                                        <div className="text-center">
+                                            <input type="file" id="resume-upload" accept=".pdf,.doc,.docx" onChange={handleFileUpload} className="hidden" />
+                                            <label htmlFor="resume-upload" className="cursor-pointer flex flex-col items-center">
+                                                <FaFileUpload className="text-4xl text-gray-400 mb-2" />
+                                                <p className="text-gray-600 mb-1">Drag & drop your resume or click to upload</p>
+                                                <p className="text-sm text-gray-500">Supports PDF, DOC, DOCX (Max 5MB)</p>
+                                            </label>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg">
+                                            <div className="flex items-center space-x-3">
+                                                {resumeFile.type.includes("pdf") ? <FaFilePdf className="text-red-500 text-xl" /> : <FaFileWord className="text-blue-500 text-xl" />}
+                                                <div>
+                                                    <p className="font-medium">{resumeFile.name}</p>
+                                                    <p className="text-sm text-gray-500">{(resumeFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                                                </div>
+                                            </div>
+                                            <button onClick={removeFile} className="text-gray-500 hover:text-red-500">
+                                                <FaTimes />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {uploadError && <p className="text-red-500 text-sm mt-2">{uploadError}</p>}
                                 </div>
                             </div>
-
-                            <div className="mb-8">
-                                <h2 className="text-xl font-semibold mb-4">Setup</h2>
-                                <div className="flex space-x-4">
-                                    <button
-                                        onClick={() => setIsCameraOn(!isCameraOn)}
-                                        className={`flex items-center space-x-2 px-4 py-2 rounded ${
-                                            isCameraOn ? 'bg-green-500 text-white' : 'bg-gray-200'
-                                        }`}
-                                    >
-                                        <FaVideo />
-                                        <span>{isCameraOn ? 'Camera On' : 'Camera Off'}</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setIsMicOn(!isMicOn)}
-                                        className={`flex items-center space-x-2 px-4 py-2 rounded ${
-                                            isMicOn ? 'bg-green-500 text-white' : 'bg-gray-200'
-                                        }`}
-                                    >
-                                        <FaMicrophone />
-                                        <span>{isMicOn ? 'Mic On' : 'Mic Off'}</span>
-                                    </button>
+                            {skillloading && <div className="text-black text-xl text-center ">
+                                <div>
+                                    Analyzing resume for skills...
                                 </div>
+
+
                             </div>
 
-                            <motion.button
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                            }
+                            {parsedResumeData.skills.length > 0 && (
+                                <div className="mt-6">
+                                    <h2 className="text-xl font-semibold mb-4">Detected Skills</h2>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        {parsedResumeData.skills.map((skill, index) => (
+                                            <div key={index} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-center">
+                                                {skill.name}
+
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Interview Controls */}
+                            <div className="flex justify-center space-x-6 mt-8">
+                                <button
+                                    onClick={toggleCamera}
+                                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${isCameraOn ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'
+                                        }`}
+                                >
+                                    {isCameraOn ? <FaVideoSlash /> : <FaVideo />}
+                                    <span>{isCameraOn ? 'Stop Camera' : 'Start Camera'}</span>
+                                </button>
+                                <button
+                                    onClick={toggleMicrophone}
+                                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${isMicOn ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'
+                                        }`}
+                                >
+                                    {isMicOn ? <FaMicrophoneSlash /> : <FaMicrophone />}
+                                    <span>{isMicOn ? 'Stop Mic' : 'Start Mic'}</span>
+                                </button>
+                            </div>
+
+                            {/* Camera Preview */}
+                            <div className="mt-6">
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    style={{ display: isCameraOn ? 'block' : 'none' }}
+                                    className="w-full h-64 bg-black rounded-lg"
+                                />
+                            </div>
+
+                            <button
                                 onClick={startInterview}
-                                className={`w-full bg-gradient-to-r from-blue-600 to-blue-800 text-white py-4 rounded-lg text-lg font-semibold hover:from-blue-700 hover:to-blue-900 ${
-                                    !resumeFile ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                                disabled={!resumeFile}
+                                disabled={!resumeFile || isLoading}
+                                className={`w-full mt-8 py-3 px-6 rounded-lg text-white font-semibold ${!resumeFile || isLoading
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
                             >
-                                Start Interview
-                            </motion.button>
+                                {isLoading ? 'Preparing Interview...' : 'Start Interview'}
+                            </button>
                         </motion.div>
+                    ) : interviewComplete ? (
+                        <InterviewResult
+                            score={interviewResults?.overallScore || 0}
+                            feedback={interviewResults?.feedback || []}
+                            keyStrengths={interviewResults?.keyStrengths || []}
+                            developmentAreas={interviewResults?.developmentAreas || []}
+                            recommendations={interviewResults?.recommendations || []}
+                            overallFeedback={interviewResults?.overallFeedback || ''}
+                        />
                     ) : (
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="bg-white rounded-lg shadow-xl"
-                        >
-                            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                                <div className="flex items-center space-x-4">
-                                    <FaRobot className="text-2xl text-blue-600" />
-                                    <div>
-                                        <h2 className="font-semibold">AI Interviewer</h2>
-                                        <p className="text-sm text-gray-600">{topics[Math.floor(Math.random() * topics.length)]} - {difficulty}</p>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-lg shadow-lg p-8">
+                            {isAnalyzing ? (
+                                <div className="text-center py-12">
+                                    <FaRobot className="text-5xl text-blue-600 mx-auto animate-bounce" />
+                                    <h2 className="text-2xl font-semibold mt-4">Analyzing Your Responses...</h2>
+                                    <p className="text-gray-600 mt-2">Please wait while we evaluate your interview performance.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-2xl font-bold">AI Mock Interview</h2>
+                                        <div className="flex items-center space-x-4">
+                                            <div className="flex items-center space-x-2 text-lg">
+                                                <FaRegClock className={`${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`} />
+                                                <span className={`font-mono ${timeRemaining <= 10 ? 'text-red-600' : ''}`}>{formatTime(timeRemaining)}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center space-x-4">
-                                    <FaRegClock className="text-gray-600" />
-                                    <span>00:00</span>
-                                </div>
-                            </div>
 
-                            <div className="p-8">
-                                <div className="grid grid-cols-2 gap-8 mb-8">
-                                    <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center">
-                                        <FaRobot className="text-6xl text-white" />
-                                    </div>
-                                    <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center">
-                                        {isCameraOn ? (
-                                            <video className="w-full h-full rounded-lg" autoPlay muted />
-                                        ) : (
-                                            <FaVideo className="text-6xl text-gray-600" />
-                                        )}
-                                    </div>
-                                </div>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <div className="col-span-2">
+                                            <video  
+                                                src={'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4'}
+                                                autoPlay
+                                                playsInline
+                                                muted
+                                                loop={true}
+        
+                                                className="w-full h-96 bg-black rounded-lg"
+                                            />
+                                            <div className="mt-4 flex justify-center space-x-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <FaMicrophone className={isRecording ? 'text-red-500' : 'text-gray-400'} />
+                                                    <span className="text-sm">{isRecording ? 'Recording' : 'Not Recording'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                <div className="flex justify-center space-x-4">
-                                    <button className="p-4 rounded-full bg-red-500 text-white hover:bg-red-600">
-                                        <FaMicrophone />
-                                    </button>
-                                    <button className="p-4 rounded-full bg-gray-500 text-white hover:bg-gray-600">
-                                        <FaVideo />
-                                    </button>
-                                    <button className="p-4 rounded-full bg-gray-500 text-white hover:bg-gray-600">
-                                        <FaCog />
-                                    </button>
-                                </div>
-                            </div>
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="text-lg font-semibold mb-4">Question {currentQuestionIndex + 1} of {questions.length}:</h3>
+                                            <p className="text-gray-700 mb-4">{currentQuestion}</p>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center space-x-2 text-lg">
+                                                    <FaRegClock className={`${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-blue-600'}`} />
+                                                    <span className={`font-mono ${timeRemaining <= 10 ? 'text-red-600' : ''}`}>{formatTime(timeRemaining)}</span>
+                                                </div>
+                                                {currentQuestionIndex < questions.length - 1 && (
+                                                    <button
+                                                        onClick={moveToNextQuestion}
+                                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                                    >
+                                                        Next Question
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {renderTranscriptSection()}
+                                    <div className="mt-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center space-x-4">
+                                                <button
+                                                    onClick={() => setIsMicOn(!isMicOn)}
+                                                    className={`p-2 rounded-full ${isMicOn ? 'bg-green-500' : 'bg-red-500'} text-white`}
+                                                >
+                                                    {isMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                                                </button>
+                                                {/* Speech recognition status */}
+                                                {isMicOn && (
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className={`w-3 h-3 rounded-full ${isSpeechDetected ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                        <span className="text-sm text-gray-600">
+                                                            {isSpeechDetected ? 'Listening...' : 'No speech detected'}
+                                                        </span>
+                                                        {transcriptionConfidence > 0 && (
+                                                            <span className="text-sm text-gray-500">
+                                                                Confidence: {Math.round(transcriptionConfidence)}%
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {speechError && (
+                                                <div className="text-red-500 text-sm mb-2">
+                                                    Error: {speechError}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Current transcript display */}
+                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                                            <h3 className="text-lg font-semibold mb-2">Your Response:</h3>
+                                            <p className="text-gray-700">{currentTranscript || 'Start speaking to see your response...'}</p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </motion.div>
                     )}
                 </div>
@@ -364,4 +713,4 @@ const MockInterview = () => {
     );
 };
 
-export default MockInterview; 
+export default MockInterview;

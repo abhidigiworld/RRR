@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import WelcomePage from "./component/WelcomePage";
 import AboutPage from "./component/AboutPage";
 import Contact from "./component/Contact";
@@ -24,6 +24,19 @@ const AuthCheck = ({ children }) => {
     return token ? children : null;
 };
 
+const PublicRoute = ({ children }) => {
+    const token = localStorage.getItem('token');
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (token) {
+            navigate('/profile');
+        }
+    }, [token, navigate]);
+
+    return !token ? children : null;
+};
+
 function App() {
   return (
     <Router>
@@ -31,9 +44,21 @@ function App() {
         <Route path="/" element={<WelcomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/registration" element={<RegistrationPage />} />
-        <Route path="/resume-builder" element={<ResumeBuilder />} />
+        <Route path="/login" element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        } />
+        <Route path="/registration" element={
+          <PublicRoute>
+            <RegistrationPage />
+          </PublicRoute>
+        } />
+        <Route path="/resume-builder" element={
+          <AuthCheck>
+            <ResumeBuilder />
+          </AuthCheck>
+        } />
         <Route path="/mock-interviews" element={
           <AuthCheck>
             <MockInterview />
@@ -45,8 +70,12 @@ function App() {
             <UserProfile />
           </AuthCheck>
         } />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="*" element={<h1>404 Not Found</h1>} />
+        <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPassword />
+          </PublicRoute>
+        } />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );

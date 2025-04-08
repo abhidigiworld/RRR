@@ -1,15 +1,19 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const puppeteer = require('puppeteer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI("AIzaSyC06-P5LquDMk5HzrziOG3OFZyGnOmwVv0");
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(cors({
-  origin: true, // Allow all origins temporarily for debugging
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
@@ -28,7 +32,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true }
 });
 
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('User1', userSchema);
 
 // Resume Schema
 const resumeSchema = new mongoose.Schema({
@@ -78,7 +82,7 @@ const resumeSchema = new mongoose.Schema({
   }]
 });
 
-const Resume = mongoose.model('Resume', resumeSchema);
+const Resume = mongoose.model('Resume1', resumeSchema);
 
 // Add OTP Schema
 const otpSchema = new mongoose.Schema({
@@ -87,7 +91,7 @@ const otpSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: 300 } // OTP expires in 5 minutes
 });
 
-const OTP = mongoose.model('OTP', otpSchema);
+const OTP = mongoose.model('OTP1', otpSchema);
 
 // Configure nodemailer
 const transporter = nodemailer.createTransport({
@@ -133,6 +137,7 @@ const sendOTPEmail = async (email, otp, type) => {
         <p>This OTP will expire in 5 minutes.</p>
         <p>For security reasons, please do not share this OTP with anyone.</p>
       </div>
+      
     `;
 
   await transporter.sendMail({
@@ -347,6 +352,163 @@ app.post('/api/resume/save', async (req, res) => {
   }
 });
 
+app.post('/api/resume/download', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            console.log('No token provided');
+            return res.status(401).json({ message: 'No token provided' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
+
+        // Get the resume data from request body instead of DB
+        const { formData, template } = req.body;
+        if (!formData) {
+            return res.status(400).json({ message: 'No resume data provided' });
+        }
+
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            headless: true
+        });
+        const page = await browser.newPage();
+
+        // Generate HTML content based on received formData
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Resume</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        max-width: 800px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }
+                    h1 { color: #333; }
+                    .section { margin-bottom: 20px; }
+                    .section-title { 
+                        color: #2563eb;
+                        border-bottom: 2px solid #2563eb;
+                        padding-bottom: 5px;
+                        margin-bottom: 10px;
+                    }
+                    .contact-info { text-align: center; margin-bottom: 20px; }
+                    .skills-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+                    .item { margin-bottom: 15px; }
+                    .dates { color: #666; font-style: italic; }
+                </style>
+            </head>
+            <body>
+                <div class="contact-info">
+                    <h1>${formData.personal.fullName || ''}</h1>
+                    <p>
+                        ${formData.personal.email || ''} | 
+                        ${formData.personal.phone || ''} | 
+                        ${formData.personal.location || ''}
+                    </p>
+                    <p>
+                        ${formData.personal.github ? 'GitHub: ' + formData.personal.github : ''} 
+                        ${formData.personal.linkedin ? '| LinkedIn: ' + formData.personal.linkedin : ''}
+                    </p>
+                </div>
+
+                ${formData.technicalSkills && (formData.technicalSkills.languages || formData.technicalSkills.technologies || formData.technicalSkills.skills) ? `
+                <div class="section">
+                    <h2 class="section-title">Technical Skills</h2>
+                    <div class="skills-grid">
+                        ${formData.technicalSkills.languages ? `<div><strong>Languages:</strong> ${formData.technicalSkills.languages}</div>` : ''}
+                        ${formData.technicalSkills.technologies ? `<div><strong>Technologies:</strong> ${formData.technicalSkills.technologies}</div>` : ''}
+                        ${formData.technicalSkills.skills ? `<div><strong>Skills:</strong> ${formData.technicalSkills.skills}</div>` : ''}
+                    </div>
+                </div>` : ''}
+
+                ${formData.training?.length > 0 ? `
+                <div class="section">
+ Shuttleworth                    <h2 class="section-title">Experience</h2>
+                    ${formData.training.map(exp => `
+                        <div class="item">
+                            <strong>${exp.company || ''} - ${exp.position || ''}</strong>
+                            <div class="dates">${exp.duration || ''}</div>
+                            <ul>
+                                ${exp.points?.map(point => `<li>${point}</li>`).join('') || ''}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.projects?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Projects</h2>
+                    ${formData.projects.map(proj => `
+                        <div class="item">
+                            <strong>${proj.title || ''}</strong> ${proj.githubLink ? `(<a href="${proj.githubLink}">${proj.githubLink}</a>)` : ''}
+                            <div class="dates">${proj.duration || ''}</div>
+                            <div>Technologies: ${proj.technologies || ''}</div>
+                            <ul>
+                                ${proj.points?.map(point => `<li>${point}</li>`).join('') || ''}
+                            </ul>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.education?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Education</h2>
+                    ${formData.education.map(edu => `
+                        <div class="item">
+                            <strong>${edu.institution || ''} - ${edu.degree || ''}</strong>
+                            <div class="dates">${edu.duration || ''}</div>
+                            <div>${edu.location || ''}</div>
+                            <div>${edu.details || ''}</div>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+
+                ${formData.certifications?.length > 0 ? `
+                <div class="section">
+                    <h2 class="section-title">Certifications</h2>
+                    ${formData.certifications.map(cert => `
+                        <div class="item">
+                            <strong>${cert.title || ''}</strong> ${cert.certificateLink ? `(<a href="${cert.certificateLink}">${cert.certificateLink}</a>)` : ''}
+                            <div>${cert.platform || ''} - ${cert.date || ''}</div>
+                        </div>
+                    `).join('')}
+                </div>` : ''}
+            </body>
+            </html>
+        `;
+
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        const pdfBuffer = await page.pdf({ 
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+        });
+
+        await browser.close();
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename=resume.pdf',
+            'Content-Length': pdfBuffer.length
+        });
+
+        res.send(pdfBuffer);
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        res.status(500).json({ 
+            message: 'Error generating PDF',
+            error: error.message 
+        });
+    }
+});
+
+
 // Fetch Resume Endpoint
 app.get('/api/resume/fetch', async (req, res) => {
   try {
@@ -386,6 +548,242 @@ app.post('/api/check-user', async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+// Interview Analysis Endpoint
+app.post('/api/analyze-interview', async (req, res) => {
+    try {
+        const { transcripts, questions } = req.body;
+        console.log('Received analysis request:', { 
+            questionsCount: questions?.length,
+            transcriptsCount: transcripts?.length,
+            questions,
+            transcripts
+        });
+
+        if (!transcripts || !questions || transcripts.length !== questions.length) {
+            throw new Error('Invalid request: Missing or mismatched questions and transcripts');
+        }
+
+        const analysisPrompt = `
+        You are an expert technical interviewer. Analyze these interview responses carefully and provide detailed, constructive feedback.
+        
+        Questions and Answers:
+        ${questions.map((q, i) => `
+        Question ${i + 1}: ${q}
+        Candidate's Answer: ${transcripts[i] || 'No response provided'}
+        `).join('\n\n')}
+        
+        Analyze each response considering:
+        1. Technical Accuracy: Evaluate the correctness and depth of technical knowledge
+        2. Communication: Assess clarity, structure, and effectiveness of communication
+        3. Problem-Solving: Evaluate the approach, methodology, and critical thinking
+        
+        Provide a detailed analysis in this exact JSON format (include specific examples from their answers):
+        {
+            "feedback": [
+                {
+                    "questionNumber": <number>,
+                    "question": "<question text>",
+                    "response": "<candidate's response>",
+                    "score": <number 0-100>,
+                    "technicalAccuracy": "<specific feedback on technical accuracy with examples>",
+                    "communication": "<specific feedback on communication style>",
+                    "problemSolving": "<specific feedback on problem-solving approach>",
+                    "strengths": ["<specific strength with example>", ...],
+                    "improvements": ["<specific area to improve with suggestion>", ...]
+                },
+                ...
+            ],
+            "overallScore": <number 0-100>,
+            "overallFeedback": "<comprehensive evaluation of performance>",
+            "keyStrengths": ["<key strength with specific example>", ...],
+            "developmentAreas": ["<specific area to develop with example>", ...],
+            "recommendations": ["<actionable recommendation>", ...]
+        }
+
+        Important:
+        - Provide specific examples from their responses
+        - Be constructive and actionable in feedback
+        - Score based on technical accuracy (40%), communication (30%), and problem-solving (30%)
+        - Ensure all feedback is detailed and helpful
+        `;
+
+        console.log('Sending analysis prompt to AI...');
+        const result = await model.generateContent(analysisPrompt);
+        const response = await result.response;
+        let analysis;
+
+        try {
+            const text = response.text();
+            console.log('Raw AI response:', text);
+            
+            // Try to extract JSON from the response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error('No JSON found in response');
+            }
+            
+            analysis = JSON.parse(jsonMatch[0]);
+            
+            // Validate the analysis structure
+            if (!analysis.feedback || !analysis.overallScore || 
+                !analysis.keyStrengths || !analysis.developmentAreas) {
+                throw new Error('Invalid analysis structure');
+            }
+
+            // Validate and clean up each feedback item
+            analysis.feedback = analysis.feedback.map((item, index) => ({
+                ...item,
+                questionNumber: index + 1,
+                question: questions[index],
+                response: transcripts[index] || 'No response provided',
+                score: Math.min(100, Math.max(0, item.score)),
+                strengths: Array.isArray(item.strengths) ? item.strengths : [],
+                improvements: Array.isArray(item.improvements) ? item.improvements : []
+            }));
+
+            // Ensure all required arrays exist
+            analysis.keyStrengths = Array.isArray(analysis.keyStrengths) ? analysis.keyStrengths : [];
+            analysis.developmentAreas = Array.isArray(analysis.developmentAreas) ? analysis.developmentAreas : [];
+            analysis.recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
+
+            // Calculate overall score if not provided or invalid
+            if (!analysis.overallScore || isNaN(analysis.overallScore)) {
+                analysis.overallScore = Math.round(
+                    analysis.feedback.reduce((sum, item) => sum + item.score, 0) / analysis.feedback.length
+                );
+            }
+            
+        } catch (e) {
+            console.error('Error parsing AI response:', e);
+            // Try one more time with a simplified prompt
+            try {
+                const retryPrompt = `
+                Analyze these interview responses and provide feedback in JSON format:
+                ${questions.map((q, i) => `Q: ${q}\nA: ${transcripts[i]}`).join('\n\n')}
+                
+                Return ONLY a JSON object with this structure:
+                {
+                    "feedback": [{"questionNumber": 1, "score": 70, ...}],
+                    "overallScore": 70,
+                    "overallFeedback": "...",
+                    "keyStrengths": ["..."],
+                    "developmentAreas": ["..."],
+                    "recommendations": ["..."]
+                }`;
+
+                const retryResult = await model.generateContent(retryPrompt);
+                const retryResponse = await retryResult.response;
+                const retryText = retryResponse.text();
+                const retryJson = retryText.match(/\{[\s\S]*\}/);
+                
+                if (retryJson) {
+                    analysis = JSON.parse(retryJson[0]);
+                } else {
+                    throw new Error('Retry failed to generate valid JSON');
+                }
+            } catch (retryError) {
+                console.error('Retry failed:', retryError);
+                throw new Error('Failed to generate interview analysis after retry');
+            }
+        }
+
+        // Final validation and cleanup
+        analysis.overallScore = Math.min(100, Math.max(0, analysis.overallScore));
+        analysis.feedback.forEach(f => {
+            f.score = Math.min(100, Math.max(0, f.score));
+        });
+
+        console.log('Sending analysis response:', analysis);
+        res.json(analysis);
+    } catch (error) {
+        console.error('Error analyzing interview:', error);
+        res.status(500).json({
+            message: 'Failed to analyze interview',
+            error: error.message
+        });
+    }
+});
+
+// Interview Question Generation Endpoint
+app.post('/api/generate', async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        console.log('Received prompt:', prompt);
+        
+        // Create a more structured prompt for the AI
+        const structuredPrompt = `
+        You are an experienced technical interviewer. Generate exactly 5 technical Basic  interview questions based on the candidate's skills and experience.
+
+        Requirements:
+        1. Generate EXACTLY 5 questions
+        2. Each question must be on a new line
+        3. Each question must end with a question mark
+        4. Questions should cover different aspects of the candidate's skills
+        5. Include basic levels
+        6. Focus on practical, real-world scenarios
+        7. DO NOT include any explanations or additional text
+        8. DO NOT number the questions
+
+        Candidate Information:
+        ${prompt}
+
+        Format your response as exactly 5 questions, one per line, nothing else.`;
+
+        // Generate response using Gemini
+        const result = await model.generateContent(structuredPrompt);
+        const response = await result.response;
+        let questions = [];
+
+        try {
+            // Get the raw text response
+            const text = response.text();
+            console.log('AI Response:', text);
+            
+            // Split by newlines and clean up
+            questions = text
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line && line.includes('?'));
+            
+            // Ensure exactly 5 questions
+            if (questions.length < 5) {
+                // If we don't have enough questions, generate some generic ones
+                const defaultQuestions = [
+                    "Can you explain your approach to problem-solving in a technical context?",
+                    "How do you stay updated with the latest technological trends?",
+                    "Describe a challenging project you worked on and how you overcame the obstacles?",
+                    "How do you handle technical disagreements in a team setting?",
+                    "What's your process for debugging complex technical issues?"
+                ];
+                questions = [...questions, ...defaultQuestions].slice(0, 5);
+            } else if (questions.length > 5) {
+                questions = questions.slice(0, 5);
+            }
+            
+            console.log('Final processed questions:', questions);
+            
+            if (questions.length !== 5) {
+                throw new Error('Failed to generate exactly 5 questions');
+            }
+        } catch (e) {
+            console.error('Error processing questions:', e);
+            throw new Error('Failed to generate valid interview questions');
+        }
+
+        res.json({ questions });
+    } catch (error) {
+        console.error('Error generating interview questions:', error);
+        res.status(500).json({ 
+            message: 'Failed to generate interview questions',
+            error: error.message 
+        });
+    }
+});
+
+app.get('/',async(req,res)=>{
+  res.send('Hello')
+})
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
