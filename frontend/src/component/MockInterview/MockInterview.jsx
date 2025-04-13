@@ -40,11 +40,13 @@ const MockInterview = () => {
     const [isSpeechDetected, setIsSpeechDetected] = useState(false);
     const [transcriptionConfidence, setTranscriptionConfidence] = useState(0);
     const [speechError, setSpeechError] = useState(null);
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
     const videoRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const streamRef = useRef(null);
     const audioChunksRef = useRef([]);
+    const recognitionRef = useRef(null);
     const baseUrl = "http://localhost:3001/";
 
     const [parsedResumeData, setParsedResumeData] = useState({
@@ -72,116 +74,178 @@ const MockInterview = () => {
     }, [isTimerRunning, timeRemaining, currentQuestionIndex, questions]);
 
     useEffect(() => {
-        // Initialize speech recognition
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        
-        if (SpeechRecognition) {
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                setSpeechError('Speech recognition is not supported in your browser');
+                return;
+            }
 
-            recognition.onstart = () => {
+            const recognitionInstance = new SpeechRecognition();
+            recognitionInstance.continuous = true;
+            recognitionInstance.interimResults = true;
+            recognitionInstance.lang = 'en-US';
+
+            recognitionInstance.onstart = () => {
+                console.log('Speech recognition started');
+                setIsTranscribing(true);
                 setSpeechError(null);
-                setIsSpeechDetected(false);
             };
 
-            recognition.onresult = (event) => {
-                let interimTranscript = '';
-                let finalTranscript = '';
-                let maxConfidence = 0;
+            recognitionInstance.onresult = (event) => {
+                const transcript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join(' ');
 
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const transcript = event.results[i][0].transcript;
-                    const confidence = event.results[i][0].confidence;
-                    
-                    if (event.results[i].isFinal) {
-                        finalTranscript += transcript;
-                        maxConfidence = Math.max(maxConfidence, confidence);
-                    } else {
-                        interimTranscript += transcript;
-                    }
-                }
-
-                if (finalTranscript) {
-                    setCurrentTranscript(prev => prev + ' ' + finalTranscript.trim());
-                    setTranscriptionConfidence(maxConfidence * 100);
-                }
+                console.log('Transcript received:', transcript);
                 
-                if (interimTranscript) {
-                    setIsSpeechDetected(true);
-                }
+                setCurrentTranscript(transcript);
+                setIsSpeechDetected(true);
+
+                // Save transcript immediately for current question
+                setTranscripts(prev => {
+                    const newTranscripts = [...prev];
+                    newTranscripts[currentQuestionIndex] = transcript;
+                    return newTranscripts;
+                });
             };
 
-            recognition.onerror = (event) => {
+            recognitionInstance.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 setSpeechError(event.error);
-                setIsSpeechDetected(false);
-                stopRecording();
-            };
+                setIsTranscribing(false);
 
-            recognition.onend = () => {
-                setIsSpeechDetected(false);
-                // Auto restart if still recording
-                if (isRecording) {
-                    try {
-                        recognition.start();
-                    } catch (error) {
-                        console.error('Error restarting recognition:', error);
-                    }
+                if (event.error === 'no-speech') {
+                    restartRecognition();
                 }
             };
 
-            recognition.onsoundstart = () => {
-                setIsSpeechDetected(true);
+            recognitionInstance.onend = () => {
+                console.log('Speech recognition ended');
+                setIsTranscribing(false);
+                
+                if (isRecording) {
+                    restartRecognition();
+                }
             };
 
-            recognition.onsoundend = () => {
-                setIsSpeechDetected(false);
-            };
+            setRecognition(recognitionInstance);
+            recognitionRef.current = recognitionInstance;
 
-            setRecognition(recognition);
-        } else {
-            setSpeechError('Speech recognition is not supported in your browser. Please use Chrome.');
+        } catch (error) {
+            console.error('Error initializing speech recognition:', error);
+            setSpeechError('Failed to initialize speech recognition');
         }
 
         return () => {
-            if (recognition) {
-                recognition.stop();
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
             }
         };
-    }, [isRecording]);
+    }, [recognitionRef, isRecording, currentQuestionIndex, questions]);
+
+    const restartRecognition = () => {
+        if (recognitionRef.current && isRecording) {
+            setTimeout(() => {
+                try {
+                    recognitionRef.current.start();
+                    console.log('Recognition restarted');
+                } catch (error) {
+                    console.error('Error restarting recognition:', error);
+                }
+            }, 100);
+        }
+    };
 
     const startRecording = async () => {
         try {
-            if (recognition) {
+            if (recognitionRef.current) {
+                // Clear previous transcript for new question
                 setCurrentTranscript('');
-                recognition.start();
-                setIsRecording(true);
+                
+                // Ensure previous instance is stopped
+                try {
+                    recognitionRef.current.stop();
+                } catch (e) {
+                    // Ignore errors if recognition wasn't running
+                }
+
+                setTimeout(() => {
+                    try {
+                        recognitionRef.current.start();
+                        setIsRecording(true);
+                        console.log('Recording started');
+                    } catch (error) {
+                        console.error('Error starting recognition:', error);
+                        setSpeechError('Failed to start recording');
+                    }
+                }, 100);
             }
         } catch (error) {
-            console.error('Error starting recording:', error);
+            console.error('Error in startRecording:', error);
             alert('Unable to start recording. Please check microphone permissions.');
         }
     };
 
     const stopRecording = () => {
-        if (recognition && isRecording) {
-            recognition.stop();
-            setIsRecording(false);
-            // Save the transcript for this question
-            setTranscripts(prev => [...prev, currentTranscript.trim()]);
-            setCurrentTranscript('');
+        try {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+                setIsRecording(false);
+                console.log('Recording stopped');
+
+                // Save final transcript for current question
+                if (currentTranscript.trim()) {
+                    setTranscripts(prev => {
+                        const newTranscripts = [...prev];
+                        newTranscripts[currentQuestionIndex] = currentTranscript.trim();
+                        return newTranscripts;
+                    });
+                    console.log('Final transcript saved:', currentTranscript.trim());
+                }
+            }
+        } catch (error) {
+            console.error('Error stopping recording:', error);
         }
     };
 
     const moveToNextQuestion = () => {
+        // Save current transcript before moving to next question
+        if (currentTranscript.trim()) {
+            setTranscripts(prev => {
+                const newTranscripts = [...prev];
+                newTranscripts[currentQuestionIndex] = currentTranscript.trim();
+                console.log('Saving transcript for question', currentQuestionIndex, ':', currentTranscript.trim());
+                return newTranscripts;
+            });
+        }
+
         stopRecording();
-        setCurrentQuestionIndex(prev => prev + 1);
-        setCurrentQuestion(questions[currentQuestionIndex + 1]);
+        
+        // Update question index and reset timer
+        setCurrentQuestionIndex(prev => {
+            const nextIndex = prev + 1;
+            setCurrentQuestion(questions[nextIndex]);
+            return nextIndex;
+        });
+        
         setTimeRemaining(60);
-        startRecording();
+
+        // Start recording for next question after a short delay
+        setTimeout(() => {
+            startRecording();
+        }, 500);
     };
+
+    // Add debug logging for transcripts
+    useEffect(() => {
+        console.log('Current transcripts:', transcripts);
+    }, [transcripts]);
+
+    useEffect(() => {
+        console.log('Current transcript for question', currentQuestionIndex, ':', currentTranscript);
+    }, [currentTranscript, currentQuestionIndex]);
 
     const finishInterview = async () => {
         // Stop recording and timer
@@ -243,7 +307,6 @@ const MockInterview = () => {
     };
 
     // Camera functionality
-    // Camera functionality
     const toggleCamera = async () => {
         try {
             if (!isCameraOn) {
@@ -294,6 +357,7 @@ const MockInterview = () => {
             setIsCameraOn(false);
         }
     };
+
     // Microphone functionality
     const toggleMicrophone = async () => {
         try {

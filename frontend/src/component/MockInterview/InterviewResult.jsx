@@ -1,8 +1,9 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { motion } from 'framer-motion';
 import { FaStar, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 
-const InterviewResult = ({ score, feedback, keyStrengths, developmentAreas, recommendations, overallFeedback }) => {
+const InterviewResult = ({ score = 0, feedback = [], keyStrengths = [], developmentAreas = [], recommendations = [], overallFeedback = '' }) => {
     const getScoreColor = (score) => {
         if (score >= 80) return 'text-green-600';
         if (score >= 60) return 'text-yellow-600';
@@ -118,6 +119,15 @@ const InterviewResult = ({ score, feedback, keyStrengths, developmentAreas, reco
             </div>
         </motion.div>
     );
+};
+
+InterviewResult.propTypes = {
+    score: PropTypes.number,
+    feedback: PropTypes.arrayOf(PropTypes.object),
+    keyStrengths: PropTypes.arrayOf(PropTypes.string),
+    developmentAreas: PropTypes.arrayOf(PropTypes.string),
+    recommendations: PropTypes.arrayOf(PropTypes.string),
+    overallFeedback: PropTypes.string,
 };
 
 export default InterviewResult;
