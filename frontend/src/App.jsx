@@ -10,6 +10,7 @@ import MockInterview from './component/MockInterview/MockInterview';
 import LearnMore from "./component/LearnMore/LearnMore";
 import UserProfile from './component/UserProfile/UserProfile';
 import ForgotPassword from './component/Login/ForgotPassword';
+import SmartRecognition from './component/SmartRecognition/SmartRecognition';
 
 const AuthCheck = ({ children }) => {
     const navigate = useNavigate();
@@ -74,6 +75,11 @@ function App() {
           <PublicRoute>
             <ForgotPassword />
           </PublicRoute>
+        } />
+        <Route path="/smart-recognition" element={
+          <AuthCheck>
+            <SmartRecognition />
+          </AuthCheck>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -24,6 +24,7 @@ const MockInterview = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [promt, setpromt] = useState([]);
     const [skillloading, setskillloading] = useState(false);
+    const [manualSkill, setManualSkill] = useState("");
     const [currentQuestion, setCurrentQuestion] = useState("");
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [questions, setQuestions] = useState([]);
@@ -76,7 +77,7 @@ const MockInterview = () => {
     useEffect(() => {
         try {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
+
             if (!SpeechRecognition) {
                 setSpeechError('Speech recognition is not supported in your browser');
                 return;
@@ -99,7 +100,7 @@ const MockInterview = () => {
                     .join(' ');
 
                 console.log('Transcript received:', transcript);
-                
+
                 setCurrentTranscript(transcript);
                 setIsSpeechDetected(true);
 
@@ -124,7 +125,7 @@ const MockInterview = () => {
             recognitionInstance.onend = () => {
                 console.log('Speech recognition ended');
                 setIsTranscribing(false);
-                
+
                 if (isRecording) {
                     restartRecognition();
                 }
@@ -163,7 +164,7 @@ const MockInterview = () => {
             if (recognitionRef.current) {
                 // Clear previous transcript for new question
                 setCurrentTranscript('');
-                
+
                 // Ensure previous instance is stopped
                 try {
                     recognitionRef.current.stop();
@@ -222,14 +223,14 @@ const MockInterview = () => {
         }
 
         stopRecording();
-        
+
         // Update question index and reset timer
         setCurrentQuestionIndex(prev => {
             const nextIndex = prev + 1;
             setCurrentQuestion(questions[nextIndex]);
             return nextIndex;
         });
-        
+
         setTimeRemaining(60);
 
         // Start recording for next question after a short delay
@@ -380,17 +381,33 @@ const MockInterview = () => {
     // Generate interview questions based on resume
     const generateQuestions = async (skills, experience, projects) => {
         try {
-            // Safely format the skills and experience data
+            // Enhanced formatting of the skills and experience data
             const skillsText = Array.isArray(skills) ? skills.join(', ') : '';
-            const experienceText = Array.isArray(experience) ?
-                experience.map(exp => exp.title || exp.position || exp.role || '').filter(Boolean).join(', ') : '';
-            const projectsText = Array.isArray(projects) ?
-                projects.map(proj => proj.title || proj.name || '').filter(Boolean).join(', ') : '';
 
+            // Better handling of experience data with more fields
+            const experienceText = Array.isArray(experience) ?
+                experience.map(exp => {
+                    const title = exp.title || exp.position || exp.role || '';
+                    const company = exp.company || exp.organization || '';
+                    return title && company ? `${title} at ${company}` : title || company;
+                }).filter(Boolean).join(', ') : '';
+
+            // Better handling of project data with more fields
+            const projectsText = Array.isArray(projects) ?
+                projects.map(proj => {
+                    const title = proj.title || proj.name || '';
+                    const tech = proj.technologies || proj.tech_stack || '';
+                    return title && tech ? `${title} (${tech})` : title;
+                }).filter(Boolean).join(', ') : '';
+
+            // More detailed prompt with structured information
             const prompt = `Generate 5 technical interview questions based on the following skills and experience:
                 Skills: ${skillsText || 'General technical skills'}
                 Experience: ${experienceText || 'General professional experience'}
-                Projects: ${projectsText || 'General project experience'}`;
+                Projects: ${projectsText || 'General project experience'}
+
+                Make questions specific to the candidate's background when possible.
+                Include a mix of technical knowledge and practical application questions.`;
 
             console.log('Sending prompt to generate questions:', prompt);
 
@@ -426,22 +443,32 @@ const MockInterview = () => {
         }
 
         if (!parsedResumeData || !parsedResumeData.skills || parsedResumeData.skills.length === 0) {
-            alert("Please wait for resume analysis to complete");
+            alert("Please add at least one skill to continue");
             return;
         }
 
         try {
+            setIsLoading(true);
+            console.log('Starting interview with parsed resume data:', parsedResumeData);
+
             await generateQuestions(
                 parsedResumeData.skills.map(skill => skill.name),
                 parsedResumeData.experience || [],
                 parsedResumeData.projects || []
             );
+
+            // Reset transcripts array for new interview
+            setTranscripts([]);
+            setCurrentTranscript('');
+
             setIsInterviewStarted(true);
             setIsTimerRunning(true);
             startRecording();
         } catch (err) {
             console.error('Error starting interview:', err);
             alert('Failed to start interview. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -501,8 +528,9 @@ const MockInterview = () => {
             return;
         }
 
-        const API_KEY = "2e34q1Zpa9wcSq0YKHF1ZQK5o87E2Pzc"; // Replace with actual APILayer API Key
+        const API_KEY = "i1dICO8qepNPn2NAHJuhVrHaLgttpzhS"; // Updated APILayer API Key
         try {
+            console.log("Analyzing resume from URL:", fileUrl);
             const response = await fetch(`https://api.apilayer.com/resume_parser/url?url=${encodeURIComponent(fileUrl)}`, {
                 method: "GET",
                 headers: {
@@ -511,25 +539,72 @@ const MockInterview = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`Error: ${response.status} - ${response.statusText}`);
+                // Handle rate limiting error specifically
+                if (response.status === 429) {
+                    console.warn("API rate limit exceeded. Using fallback method.");
+                    // Set a specific message for rate limiting
+                    setUploadError("API rate limit exceeded. Please enter your skills manually below.");
+
+                    // Return a minimal object with empty skills array that will be populated manually
+                    const fallbackData = {
+                        skills: [],
+                        experience: [],
+                        projects: []
+                    };
+
+                    setParsedResumeData(fallbackData);
+                    setDetectedTopics([]);
+
+                    return fallbackData;
+                } else {
+                    throw new Error(`Error: ${response.status} - ${response.statusText}`);
+                }
             }
 
             const data = await response.json();
+            console.log("Resume parsing result:", data);
 
+            // Enhanced formatting of resume data
             const formattedData = {
                 skills: data.skills?.map((skill) => ({
                     name: skill,
-                    level: DetectedSkill.MODERATE, // Modify logic to determine level
+                    level: DetectedSkill.MODERATE, // Default level
                     subtopics: [],
+                    description: `Experience with ${skill}`
                 })) || [],
-                experience: data.experience || [],
-                projects: data.projects || [],
+                experience: data.experience?.map(exp => ({
+                    ...exp,
+                    title: exp.title || exp.position || exp.role || '',
+                    company: exp.company || exp.organization || '',
+                    duration: exp.dates || exp.duration || ''
+                })) || [],
+                projects: data.projects?.map(proj => ({
+                    ...proj,
+                    title: proj.title || proj.name || '',
+                    technologies: proj.technologies || proj.tech_stack || '',
+                    duration: proj.dates || proj.duration || ''
+                })) || [],
+                education: data.education || []
             };
+
+            console.log("Formatted resume data:", formattedData);
             setParsedResumeData(formattedData);
             setDetectedTopics(formattedData.skills.map((skill) => skill.name));
+            return formattedData;
         } catch (err) {
-            setUploadError("Failed to analyze resume. Please try again.");
+            setUploadError("Failed to analyze resume. Please try again or enter skills manually.");
             console.error("Resume Parsing Error:", err);
+
+            // Return a minimal object with empty skills array that will be populated manually
+            const fallbackData = {
+                skills: [],
+                experience: [],
+                projects: []
+            };
+
+            setParsedResumeData(fallbackData);
+            setDetectedTopics([]);
+            return fallbackData;
         }
     };
 
@@ -537,10 +612,38 @@ const MockInterview = () => {
         setResumeFile(null);
         setUploadError("");
         setParsedResumeData({
-            skills: []
-        })
+            skills: [],
+            experience: [],
+            projects: []
+        });
+        setDetectedTopics([]);
         setskillloading(false);
+        setManualSkill("");
+    };
 
+    // Add a skill manually
+    const addManualSkill = () => {
+        if (!manualSkill.trim()) return;
+
+        // Add the skill to parsedResumeData
+        const newSkill = {
+            name: manualSkill.trim(),
+            level: DetectedSkill.MODERATE,
+            subtopics: []
+        };
+
+        // Update parsed resume data
+        const updatedSkills = [...parsedResumeData.skills, newSkill];
+        setParsedResumeData({
+            ...parsedResumeData,
+            skills: updatedSkills
+        });
+
+        // Update detected topics
+        setDetectedTopics([...detectedTopics, newSkill.name]);
+
+        // Clear the input
+        setManualSkill("");
     };
 
     useEffect(() => {
@@ -605,17 +708,45 @@ const MockInterview = () => {
                             </div>
 
                             }
-                            {parsedResumeData.skills.length > 0 && (
+                            {resumeFile && (
                                 <div className="mt-6">
-                                    <h2 className="text-xl font-semibold mb-4">Detected Skills</h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        {parsedResumeData.skills.map((skill, index) => (
-                                            <div key={index} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-center">
-                                                {skill.name}
+                                    <h2 className="text-xl font-semibold mb-4">{parsedResumeData.skills.length > 0 ? "Detected Skills" : "Add Your Skills"}</h2>
 
-                                            </div>
-                                        ))}
+                                    {/* Manual skill entry */}
+                                    <div className="mb-4">
+                                        <div className="flex">
+                                            <input
+                                                type="text"
+                                                value={manualSkill}
+                                                onChange={(e) => setManualSkill(e.target.value)}
+                                                placeholder="Enter a skill (e.g., JavaScript, Project Management)"
+                                                className="flex-grow p-2 border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                onKeyDown={(e) => e.key === 'Enter' && addManualSkill()}
+                                            />
+                                            <button
+                                                onClick={addManualSkill}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-r-lg transition-colors"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+                                        {parsedResumeData.skills.length === 0 && (
+                                            <p className="text-sm text-gray-600 mt-2">
+                                                {uploadError ? uploadError : "Please add at least one skill to continue."}
+                                            </p>
+                                        )}
                                     </div>
+
+                                    {/* Display skills */}
+                                    {parsedResumeData.skills.length > 0 && (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            {parsedResumeData.skills.map((skill, index) => (
+                                                <div key={index} className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-center">
+                                                    {skill.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -693,13 +824,13 @@ const MockInterview = () => {
 
                                     <div className="grid grid-cols-3 gap-6">
                                         <div className="col-span-2">
-                                            <video  
+                                            <video
                                                 src={'https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4'}
                                                 autoPlay
                                                 playsInline
                                                 muted
                                                 loop={true}
-        
+
                                                 className="w-full h-96 bg-black rounded-lg"
                                             />
                                             <div className="mt-4 flex justify-center space-x-4">

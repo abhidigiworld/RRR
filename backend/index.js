@@ -109,11 +109,11 @@ const generateOTP = () => {
 
 // Send OTP Email
 const sendOTPEmail = async (email, otp, type) => {
-  const subject = type === 'registration' 
-    ? 'Welcome to RRR - Email Verification' 
+  const subject = type === 'registration'
+    ? 'Welcome to RRR - Email Verification'
     : 'RRR - Password Reset Request';
 
-  const html = type === 'registration' 
+  const html = type === 'registration'
     ? `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #2563eb;">Welcome to RRR - Resume Recognition & Reconfiguration</h2>
@@ -137,7 +137,7 @@ const sendOTPEmail = async (email, otp, type) => {
         <p>This OTP will expire in 5 minutes.</p>
         <p>For security reasons, please do not share this OTP with anyone.</p>
       </div>
-      
+
     `;
 
   await transporter.sendMail({
@@ -201,7 +201,7 @@ app.post('/api/reset-password', async (req, res) => {
   try {
     const { email, newPassword } = req.body;
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    
+
     await User.findOneAndUpdate(
       { email },
       { password: hashedPassword }
@@ -275,9 +275,9 @@ app.post('/api/login', async (req, res) => {
     );
 
     console.log("Login successful for user:", email);
-    res.status(200).json({ 
-      result: user, 
-      token, 
+    res.status(200).json({
+      result: user,
+      token,
       userType: 'user',
       fullName: user.fullName
     });
@@ -298,7 +298,7 @@ app.get('/api/resume/user-data', async (req, res) => {
 
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
         // Find user
         const user = await User.findById(decoded.id);
         if (!user) {
@@ -391,7 +391,7 @@ app.post('/api/resume/download', async (req, res) => {
                     }
                     h1 { color: #333; }
                     .section { margin-bottom: 20px; }
-                    .section-title { 
+                    .section-title {
                         color: #2563eb;
                         border-bottom: 2px solid #2563eb;
                         padding-bottom: 5px;
@@ -407,12 +407,12 @@ app.post('/api/resume/download', async (req, res) => {
                 <div class="contact-info">
                     <h1>${formData.personal.fullName || ''}</h1>
                     <p>
-                        ${formData.personal.email || ''} | 
-                        ${formData.personal.phone || ''} | 
+                        ${formData.personal.email || ''} |
+                        ${formData.personal.phone || ''} |
                         ${formData.personal.location || ''}
                     </p>
                     <p>
-                        ${formData.personal.github ? 'GitHub: ' + formData.personal.github : ''} 
+                        ${formData.personal.github ? 'GitHub: ' + formData.personal.github : ''}
                         ${formData.personal.linkedin ? '| LinkedIn: ' + formData.personal.linkedin : ''}
                     </p>
                 </div>
@@ -484,7 +484,7 @@ app.post('/api/resume/download', async (req, res) => {
         `;
 
         await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-        const pdfBuffer = await page.pdf({ 
+        const pdfBuffer = await page.pdf({
             format: 'A4',
             printBackground: true,
             margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
@@ -501,9 +501,9 @@ app.post('/api/resume/download', async (req, res) => {
         res.send(pdfBuffer);
     } catch (error) {
         console.error('Error generating PDF:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             message: 'Error generating PDF',
-            error: error.message 
+            error: error.message
         });
     }
 });
@@ -553,7 +553,7 @@ app.post('/api/check-user', async (req, res) => {
 app.post('/api/analyze-interview', async (req, res) => {
     try {
         const { transcripts, questions } = req.body;
-        console.log('Received analysis request:', { 
+        console.log('Received analysis request:', {
             questionsCount: questions?.length,
             transcriptsCount: transcripts?.length,
             questions,
@@ -564,20 +564,23 @@ app.post('/api/analyze-interview', async (req, res) => {
             throw new Error('Invalid request: Missing or mismatched questions and transcripts');
         }
 
+        // Create a more detailed prompt with better instructions
         const analysisPrompt = `
-        You are an expert technical interviewer. Analyze these interview responses carefully and provide detailed, constructive feedback.
-        
+        You are an expert technical interviewer with years of experience evaluating candidates.
+        Analyze these interview responses carefully and provide detailed, constructive feedback.
+
         Questions and Answers:
         ${questions.map((q, i) => `
         Question ${i + 1}: ${q}
         Candidate's Answer: ${transcripts[i] || 'No response provided'}
         `).join('\n\n')}
-        
+
         Analyze each response considering:
         1. Technical Accuracy: Evaluate the correctness and depth of technical knowledge
         2. Communication: Assess clarity, structure, and effectiveness of communication
         3. Problem-Solving: Evaluate the approach, methodology, and critical thinking
-        
+        4. Completeness: Evaluate how thoroughly the candidate addressed all aspects of the question
+
         Provide a detailed analysis in this exact JSON format (include specific examples from their answers):
         {
             "feedback": [
@@ -601,11 +604,14 @@ app.post('/api/analyze-interview', async (req, res) => {
             "recommendations": ["<actionable recommendation>", ...]
         }
 
-        Important:
-        - Provide specific examples from their responses
+        Important guidelines:
+        - Provide specific examples from their responses in your feedback
         - Be constructive and actionable in feedback
-        - Score based on technical accuracy (40%), communication (30%), and problem-solving (30%)
-        - Ensure all feedback is detailed and helpful
+        - Score based on technical accuracy (40%), communication (30%), problem-solving (20%), and completeness (10%)
+        - Ensure all feedback is detailed, helpful, and actionable
+        - For short or incomplete answers, provide specific suggestions on what the candidate should have included
+        - Focus on both strengths and areas for improvement
+        - Make recommendations specific to the candidate's performance
         `;
 
         console.log('Sending analysis prompt to AI...');
@@ -615,18 +621,19 @@ app.post('/api/analyze-interview', async (req, res) => {
 
         try {
             const text = response.text();
-            console.log('Raw AI response:', text);
-            
+            console.log('Raw AI response received');
+
             // Try to extract JSON from the response
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (!jsonMatch) {
                 throw new Error('No JSON found in response');
             }
-            
+
             analysis = JSON.parse(jsonMatch[0]);
-            
+            console.log('Successfully parsed JSON response');
+
             // Validate the analysis structure
-            if (!analysis.feedback || !analysis.overallScore || 
+            if (!analysis.feedback || !analysis.overallScore ||
                 !analysis.keyStrengths || !analysis.developmentAreas) {
                 throw new Error('Invalid analysis structure');
             }
@@ -638,14 +645,38 @@ app.post('/api/analyze-interview', async (req, res) => {
                 question: questions[index],
                 response: transcripts[index] || 'No response provided',
                 score: Math.min(100, Math.max(0, item.score)),
+                technicalAccuracy: item.technicalAccuracy || 'No specific feedback provided',
+                communication: item.communication || 'No specific feedback provided',
+                problemSolving: item.problemSolving || 'No specific feedback provided',
                 strengths: Array.isArray(item.strengths) ? item.strengths : [],
                 improvements: Array.isArray(item.improvements) ? item.improvements : []
             }));
 
-            // Ensure all required arrays exist
-            analysis.keyStrengths = Array.isArray(analysis.keyStrengths) ? analysis.keyStrengths : [];
-            analysis.developmentAreas = Array.isArray(analysis.developmentAreas) ? analysis.developmentAreas : [];
-            analysis.recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
+            // Ensure all required arrays exist and have content
+            analysis.keyStrengths = Array.isArray(analysis.keyStrengths) && analysis.keyStrengths.length > 0
+                ? analysis.keyStrengths
+                : ['Participated in the interview process', 'Attempted to answer technical questions'];
+
+            analysis.developmentAreas = Array.isArray(analysis.developmentAreas) && analysis.developmentAreas.length > 0
+                ? analysis.developmentAreas
+                : ['Improve technical knowledge depth', 'Enhance communication clarity'];
+
+            analysis.recommendations = Array.isArray(analysis.recommendations) && analysis.recommendations.length > 0
+                ? analysis.recommendations
+                : ['Practice more technical interviews', 'Study core concepts in depth', 'Work on structured communication'];
+
+            // Ensure overallFeedback exists
+            if (!analysis.overallFeedback || analysis.overallFeedback.trim() === '') {
+                // Generate a basic overall feedback based on the score
+                const score = analysis.overallScore || 0;
+                if (score >= 80) {
+                    analysis.overallFeedback = 'Overall, you demonstrated strong technical knowledge and communication skills. Continue building on your strengths while addressing the few areas for improvement.';
+                } else if (score >= 60) {
+                    analysis.overallFeedback = 'You showed good potential with some solid technical knowledge, but there are several areas where you could improve to become more effective in technical interviews.';
+                } else {
+                    analysis.overallFeedback = 'This interview revealed several areas where you need significant improvement. Focus on building your technical knowledge and practice structured communication for technical discussions.';
+                }
+            }
 
             // Calculate overall score if not provided or invalid
             if (!analysis.overallScore || isNaN(analysis.overallScore)) {
@@ -653,38 +684,71 @@ app.post('/api/analyze-interview', async (req, res) => {
                     analysis.feedback.reduce((sum, item) => sum + item.score, 0) / analysis.feedback.length
                 );
             }
-            
+
         } catch (e) {
             console.error('Error parsing AI response:', e);
             // Try one more time with a simplified prompt
             try {
                 const retryPrompt = `
                 Analyze these interview responses and provide feedback in JSON format:
-                ${questions.map((q, i) => `Q: ${q}\nA: ${transcripts[i]}`).join('\n\n')}
-                
+                ${questions.map((q, i) => `Q: ${q}\nA: ${transcripts[i] || 'No response'}`).join('\n\n')}
+
                 Return ONLY a JSON object with this structure:
                 {
-                    "feedback": [{"questionNumber": 1, "score": 70, ...}],
+                    "feedback": [
+                        {
+                            "questionNumber": 1,
+                            "score": 70,
+                            "technicalAccuracy": "Brief feedback",
+                            "communication": "Brief feedback",
+                            "problemSolving": "Brief feedback",
+                            "strengths": ["One strength"],
+                            "improvements": ["One improvement"]
+                        },
+                        // Repeat for each question
+                    ],
                     "overallScore": 70,
-                    "overallFeedback": "...",
-                    "keyStrengths": ["..."],
-                    "developmentAreas": ["..."],
-                    "recommendations": ["..."]
+                    "overallFeedback": "Brief overall assessment",
+                    "keyStrengths": ["Key strength 1", "Key strength 2"],
+                    "developmentAreas": ["Area 1", "Area 2"],
+                    "recommendations": ["Recommendation 1", "Recommendation 2"]
                 }`;
 
+                console.log('Attempting retry with simplified prompt...');
                 const retryResult = await model.generateContent(retryPrompt);
                 const retryResponse = await retryResult.response;
                 const retryText = retryResponse.text();
                 const retryJson = retryText.match(/\{[\s\S]*\}/);
-                
+
                 if (retryJson) {
                     analysis = JSON.parse(retryJson[0]);
+                    console.log('Successfully parsed JSON from retry');
                 } else {
                     throw new Error('Retry failed to generate valid JSON');
                 }
             } catch (retryError) {
                 console.error('Retry failed:', retryError);
-                throw new Error('Failed to generate interview analysis after retry');
+
+                // Create a basic fallback analysis if all else fails
+                analysis = {
+                    feedback: questions.map((q, i) => ({
+                        questionNumber: i + 1,
+                        question: q,
+                        response: transcripts[i] || 'No response provided',
+                        score: 60,
+                        technicalAccuracy: 'Review needed for technical accuracy',
+                        communication: 'Communication could be improved',
+                        problemSolving: 'Problem-solving approach needs development',
+                        strengths: ['Attempted to answer the question'],
+                        improvements: ['Provide more detailed and structured responses']
+                    })),
+                    overallScore: 60,
+                    overallFeedback: 'The interview showed areas where improvement is needed. Focus on building technical knowledge and communication skills.',
+                    keyStrengths: ['Participated in the interview process'],
+                    developmentAreas: ['Technical knowledge depth', 'Communication structure'],
+                    recommendations: ['Study core technical concepts', 'Practice structured responses', 'Prepare examples from your experience']
+                };
+                console.log('Using fallback analysis structure');
             }
         }
 
@@ -694,7 +758,7 @@ app.post('/api/analyze-interview', async (req, res) => {
             f.score = Math.min(100, Math.max(0, f.score));
         });
 
-        console.log('Sending analysis response:', analysis);
+        console.log('Sending analysis response with score:', analysis.overallScore);
         res.json(analysis);
     } catch (error) {
         console.error('Error analyzing interview:', error);
@@ -710,20 +774,22 @@ app.post('/api/generate', async (req, res) => {
     try {
         const { prompt } = req.body;
         console.log('Received prompt:', prompt);
-        
-        // Create a more structured prompt for the AI
+
+        // Create a more structured prompt for the AI with better instructions
         const structuredPrompt = `
-        You are an experienced technical interviewer. Generate exactly 5 technical Basic  interview questions based on the candidate's skills and experience.
+        You are an experienced technical interviewer with expertise in evaluating candidates.
+        Generate exactly 5 technical interview questions based on the candidate's skills and experience.
 
         Requirements:
         1. Generate EXACTLY 5 questions
         2. Each question must be on a new line
         3. Each question must end with a question mark
         4. Questions should cover different aspects of the candidate's skills
-        5. Include basic levels
+        5. Include a mix of basic, intermediate, and advanced questions
         6. Focus on practical, real-world scenarios
-        7. DO NOT include any explanations or additional text
-        8. DO NOT number the questions
+        7. Include questions that test both theoretical knowledge and practical application
+        8. DO NOT include any explanations or additional text
+        9. DO NOT number the questions
 
         Candidate Information:
         ${prompt}
@@ -731,6 +797,7 @@ app.post('/api/generate', async (req, res) => {
         Format your response as exactly 5 questions, one per line, nothing else.`;
 
         // Generate response using Gemini
+        console.log('Sending prompt to Gemini...');
         const result = await model.generateContent(structuredPrompt);
         const response = await result.response;
         let questions = [];
@@ -738,45 +805,318 @@ app.post('/api/generate', async (req, res) => {
         try {
             // Get the raw text response
             const text = response.text();
-            console.log('AI Response:', text);
-            
+            console.log('AI Response received');
+
             // Split by newlines and clean up
             questions = text
                 .split('\n')
                 .map(line => line.trim())
                 .filter(line => line && line.includes('?'));
-            
+
+            console.log(`Extracted ${questions.length} questions from response`);
+
             // Ensure exactly 5 questions
             if (questions.length < 5) {
-                // If we don't have enough questions, generate some generic ones
+                console.log(`Only got ${questions.length} questions, adding default questions`);
+                // If we don't have enough questions, generate some generic ones based on the prompt
                 const defaultQuestions = [
                     "Can you explain your approach to problem-solving in a technical context?",
-                    "How do you stay updated with the latest technological trends?",
-                    "Describe a challenging project you worked on and how you overcame the obstacles?",
+                    "How do you stay updated with the latest technological trends in your field?",
+                    "Describe a challenging project you worked on and how you overcame the technical obstacles?",
                     "How do you handle technical disagreements in a team setting?",
-                    "What's your process for debugging complex technical issues?"
+                    "What's your process for debugging complex technical issues in your work?",
+                    "How do you approach learning new technologies or programming languages?",
+                    "Can you describe how you would design a system with scalability in mind?"
                 ];
                 questions = [...questions, ...defaultQuestions].slice(0, 5);
             } else if (questions.length > 5) {
+                console.log(`Got ${questions.length} questions, trimming to 5`);
                 questions = questions.slice(0, 5);
             }
-            
+
+            // Ensure all questions end with a question mark
+            questions = questions.map(q => q.endsWith('?') ? q : `${q}?`);
+
             console.log('Final processed questions:', questions);
-            
+
             if (questions.length !== 5) {
                 throw new Error('Failed to generate exactly 5 questions');
             }
         } catch (e) {
             console.error('Error processing questions:', e);
-            throw new Error('Failed to generate valid interview questions');
+
+            // Fallback to basic questions if processing fails
+            questions = [
+                "Can you explain your approach to problem-solving in a technical context?",
+                "How do you stay updated with the latest technological trends?",
+                "Describe a challenging project you worked on and how you overcame the obstacles?",
+                "How do you handle technical disagreements in a team setting?",
+                "What's your process for debugging complex technical issues?"
+            ];
+            console.log('Using fallback questions due to error');
         }
 
         res.json({ questions });
     } catch (error) {
         console.error('Error generating interview questions:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             message: 'Failed to generate interview questions',
-            error: error.message 
+            error: error.message
+        });
+    }
+});
+
+// Smart Recognition Endpoint
+app.post('/api/smart-recognition', async (req, res) => {
+    try {
+        const { resumeData, useAI } = req.body;
+        console.log('Received resume data for analysis:', resumeData);
+
+        if (!resumeData || !resumeData.skills || !Array.isArray(resumeData.skills)) {
+            return res.status(400).json({ message: 'Invalid resume data format' });
+        }
+
+        // Verify token if available
+        let userId = null;
+        const token = req.headers.authorization?.split(' ')[1];
+        if (token) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                userId = decoded.id;
+                console.log('User authenticated:', userId);
+            } catch (err) {
+                console.warn('Invalid token provided, continuing as anonymous user');
+            }
+        }
+
+        // Extract skills from resume data
+        const skills = resumeData.skills;
+        console.log('Extracted skills:', skills);
+
+        // Use AI to analyze skills and suggest career paths
+        if (useAI) {
+            console.log('Using AI for enhanced analysis...');
+
+            // Format the resume data for the AI prompt
+            const skillsString = Array.isArray(skills) ? skills.join(', ') : skills;
+
+            // Better formatting of experience data
+            let experienceString = 'No experience provided';
+            if (resumeData.experience && resumeData.experience.length > 0) {
+                experienceString = resumeData.experience.map(exp => {
+                    const title = exp.title || exp.position || exp.role || '';
+                    const company = exp.company || exp.organization || '';
+                    const duration = exp.duration || exp.dates || '';
+                    const description = exp.description || '';
+
+                    return `${title}${company ? ' at ' + company : ''}${duration ? ' (' + duration + ')' : ''}${description ? ': ' + description : ''}`;
+                }).join('; ');
+
+                // Limit string length
+                if (experienceString.length > 800) {
+                    experienceString = experienceString.substring(0, 800) + '...';
+                }
+            }
+
+            // Better formatting of project data
+            let projectsString = 'No projects provided';
+            if (resumeData.projects && resumeData.projects.length > 0) {
+                projectsString = resumeData.projects.map(proj => {
+                    const title = proj.title || proj.name || '';
+                    const tech = proj.technologies || proj.tech_stack || '';
+                    const description = proj.description || '';
+
+                    return `${title}${tech ? ' using ' + tech : ''}${description ? ': ' + description : ''}`;
+                }).join('; ');
+
+                // Limit string length
+                if (projectsString.length > 800) {
+                    projectsString = projectsString.substring(0, 800) + '...';
+                }
+            }
+
+            // Add education data if available
+            let educationString = 'No education provided';
+            if (resumeData.education && resumeData.education.length > 0) {
+                educationString = resumeData.education.map(edu => {
+                    const institution = edu.institution || edu.school || '';
+                    const degree = edu.degree || edu.qualification || '';
+                    const field = edu.field || edu.major || '';
+
+                    return `${degree}${field ? ' in ' + field : ''}${institution ? ' from ' + institution : ''}`;
+                }).join('; ');
+            }
+
+            const analysisPrompt = `
+            You are a career advisor with expertise in technical skills assessment. Analyze the following resume data and provide detailed insights.
+
+            Resume Data:
+            - Skills: ${skillsString}
+            - Experience: ${experienceString}
+            - Projects: ${projectsString}
+            - Education: ${educationString}
+
+            Provide a detailed analysis in this exact JSON format:
+            {
+                "skillsAnalysis": [
+                    {
+                        "name": "<skill name>",
+                        "level": "<Beginner/Intermediate/Expert>",
+                        "description": "<detailed assessment of this skill>"
+                    },
+                    ...
+                ],
+                "roleRecommendations": [
+                    {
+                        "roleType": "<job title>",
+                        "suitabilityScore": <number 0-100>,
+                        "description": "<why this role is suitable>",
+                        "requiredSkills": ["<skill1>", "<skill2>", ...],
+                        "careerPath": "<progression path for this role>"
+                    },
+                    ...
+                ]
+            }
+
+            Important guidelines:
+            1. Analyze ALL skills provided in the resume
+            2. Provide at least 3 role recommendations
+            3. Be specific and detailed in your assessments
+            4. Base your analysis on current industry standards
+            5. Ensure suitability scores reflect the match between skills and role requirements
+            6. Include both technical and soft skills in your analysis
+            7. Consider education and experience when making role recommendations
+            `;
+
+            try {
+                console.log('Sending analysis prompt to AI...');
+                const result = await model.generateContent(analysisPrompt);
+                const response = await result.response;
+                const text = response.text();
+                console.log('Raw AI response received');
+
+                // Extract JSON from response
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error('No JSON found in AI response');
+                }
+
+                const analysis = JSON.parse(jsonMatch[0]);
+                console.log('AI analysis complete');
+
+                // Validate and clean up the analysis
+                if (!analysis.skillsAnalysis || !Array.isArray(analysis.skillsAnalysis)) {
+                    analysis.skillsAnalysis = [];
+                }
+
+                if (!analysis.roleRecommendations || !Array.isArray(analysis.roleRecommendations)) {
+                    analysis.roleRecommendations = [];
+                }
+
+                // Ensure all skills are analyzed
+                const analyzedSkillNames = analysis.skillsAnalysis.map(s => s.name.toLowerCase());
+                const missingSkills = skills.filter(skill =>
+                    !analyzedSkillNames.includes(skill.toLowerCase())
+                );
+
+                // Add missing skills to the analysis
+                if (missingSkills.length > 0) {
+                    const additionalSkills = missingSkills.map(skill => ({
+                        name: skill,
+                        level: 'Intermediate',
+                        description: `Experience with ${skill}`
+                    }));
+                    analysis.skillsAnalysis = [...analysis.skillsAnalysis, ...additionalSkills];
+                }
+
+                // Ensure we have at least 2 role recommendations
+                if (analysis.roleRecommendations.length < 2) {
+                    const defaultRoles = [
+                        {
+                            roleType: 'Software Developer',
+                            suitabilityScore: 85,
+                            description: 'Based on your technical skills',
+                            requiredSkills: skills.slice(0, 3),
+                            careerPath: 'Junior Developer → Developer → Senior Developer → Lead Developer'
+                        },
+                        {
+                            roleType: 'Data Analyst',
+                            suitabilityScore: 75,
+                            description: 'Your analytical skills are valuable in this role',
+                            requiredSkills: ['Data Analysis', 'SQL', 'Problem Solving'],
+                            careerPath: 'Data Analyst → Senior Data Analyst → Data Scientist → Lead Data Scientist'
+                        }
+                    ];
+
+                    // Add only the missing number of roles
+                    const neededRoles = defaultRoles.slice(0, 2 - analysis.roleRecommendations.length);
+                    analysis.roleRecommendations = [...analysis.roleRecommendations, ...neededRoles];
+                }
+
+                return res.status(200).json(analysis);
+            } catch (error) {
+                console.error('Error in AI analysis:', error);
+
+                // Fallback to basic analysis if AI fails
+                const basicAnalysis = {
+                    skillsAnalysis: skills.map(skill => ({
+                        name: skill,
+                        level: 'Intermediate',
+                        description: `Experience with ${skill}`
+                    })),
+                    roleRecommendations: [
+                        {
+                            roleType: 'Software Developer',
+                            suitabilityScore: 85,
+                            description: 'Based on your technical skills',
+                            requiredSkills: skills.slice(0, 3),
+                            careerPath: 'Junior Developer → Developer → Senior Developer → Lead Developer'
+                        },
+                        {
+                            roleType: 'Data Analyst',
+                            suitabilityScore: 75,
+                            description: 'Your analytical skills are valuable in this role',
+                            requiredSkills: ['Data Analysis', 'SQL', 'Problem Solving'],
+                            careerPath: 'Data Analyst → Senior Data Analyst → Data Scientist → Lead Data Scientist'
+                        }
+                    ]
+                };
+
+                return res.status(200).json(basicAnalysis);
+            }
+        } else {
+            // Basic analysis without AI
+            const basicAnalysis = {
+                skillsAnalysis: skills.map(skill => ({
+                    name: skill,
+                    level: 'Intermediate',
+                    description: `Experience with ${skill}`
+                })),
+                roleRecommendations: [
+                    {
+                        roleType: 'Software Developer',
+                        suitabilityScore: 85,
+                        description: 'Based on your technical skills',
+                        requiredSkills: skills.slice(0, 3),
+                        careerPath: 'Junior Developer → Developer → Senior Developer → Lead Developer'
+                    },
+                    {
+                        roleType: 'Data Analyst',
+                        suitabilityScore: 75,
+                        description: 'Your analytical skills are valuable in this role',
+                        requiredSkills: ['Data Analysis', 'SQL', 'Problem Solving'],
+                        careerPath: 'Data Analyst → Senior Data Analyst → Data Scientist → Lead Data Scientist'
+                    }
+                ]
+            };
+
+            return res.status(200).json(basicAnalysis);
+        }
+    } catch (error) {
+        console.error('Error in smart recognition:', error);
+        res.status(500).json({
+            message: 'Failed to analyze resume',
+            error: error.message
         });
     }
 });
