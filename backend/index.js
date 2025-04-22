@@ -287,6 +287,39 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Token Refresh Endpoint
+app.post('/api/refresh-token', async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Generate a new token
+    const token = jwt.sign(
+      { email: user.email, id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    console.log("Token refreshed for user:", user.email);
+    res.status(200).json({
+      token,
+      message: 'Session extended successfully'
+    });
+  } catch (error) {
+    console.error("Token refresh error:", error);
+    res.status(500).json({ message: 'Failed to refresh token', error: error.message });
+  }
+});
+
 // Protected route to get user data
 app.get('/api/resume/user-data', async (req, res) => {
     try {

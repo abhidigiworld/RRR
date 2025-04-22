@@ -11,6 +11,7 @@ import LearnMore from "./component/LearnMore/LearnMore";
 import UserProfile from './component/UserProfile/UserProfile';
 import ForgotPassword from './component/Login/ForgotPassword';
 import SmartRecognition from './component/SmartRecognition/SmartRecognition';
+import SessionManager from './component/SessionManager/SessionManager';
 
 const AuthCheck = ({ children }) => {
     const navigate = useNavigate();
@@ -38,9 +39,19 @@ const PublicRoute = ({ children }) => {
     return !token ? children : null;
 };
 
+// Session Manager wrapper component that will be used inside Router context
+const SessionManagerWrapper = () => {
+  const token = localStorage.getItem('token');
+  // Only render SessionManager if user is logged in
+  return token ? <SessionManager /> : null;
+};
+
 function App() {
   return (
     <Router>
+      {/* Add SessionManager to track token expiration */}
+      <SessionManagerWrapper />
+
       <Routes>
         <Route path="/" element={<WelcomePage />} />
         <Route path="/about" element={<AboutPage />} />
