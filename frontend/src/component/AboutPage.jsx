@@ -16,8 +16,8 @@ const DeveloperCard = ({ name, role, description, image, skills, socialLinks }) 
         <div className="flex flex-col items-center">
             <div className="relative mb-6">
                 <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-blue-500 p-1">
-                    <img 
-                        src={image} 
+                    <img
+                        src={image}
                         alt={name}
                         className="w-full h-full rounded-full object-cover"
                     />
@@ -28,7 +28,7 @@ const DeveloperCard = ({ name, role, description, image, skills, socialLinks }) 
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">{name}</h3>
             <p className="text-gray-400 text-center mb-4">{description}</p>
-            
+
             {/* Skills */}
             <div className="flex flex-wrap gap-2 justify-center mb-4">
                 {skills.map((Skill, index) => (
@@ -58,8 +58,8 @@ const AboutPage = () => {
     const features = [
         {
             icon: FaBrain,
-            title: "AI-Driven Analysis",
-            description: "Our platform utilizes advanced AI algorithms to analyze resumes, identify key skills, and suggest improvements based on industry best practices. The system learns from thousands of successful resumes to provide tailored recommendations."
+            title: "Smart Resume Analysis",
+            description: "Our platform helps analyze resumes, identify key skills, and suggest improvements based on industry best practices. The system provides tailored recommendations to enhance your professional profile."
         },
         {
             icon: FaUserTie,
@@ -100,7 +100,7 @@ const AboutPage = () => {
             socialLinks: [
                 { icon: FaGithub, url: "https://github.com/DeepakRajjj" },
                 { icon: FaLinkedin, url: "https://linkedin.com/in/deepak-rajj" },
-                
+
             ]
         },
         {
@@ -131,7 +131,7 @@ const AboutPage = () => {
     return (
         <div className="min-h-screen bg-gray-900">
             <Header />
-            
+
             {/* Hero Section */}
             <section className="py-20 px-4">
                 <div className="max-w-7xl mx-auto text-center">
@@ -149,7 +149,7 @@ const AboutPage = () => {
                         className="space-y-6 text-gray-400"
                     >
                         <p className="text-xl max-w-3xl mx-auto">
-                            RRR stands for <span className="text-blue-400 font-semibold">Resume Recognition & Reconfiguration</span>, 
+                            RRR stands for <span className="text-blue-400 font-semibold">Resume Recognition & Reconfiguration</span>,
                             a name that embodies our platform's core functionalities:
                         </p>
                         <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
@@ -162,7 +162,7 @@ const AboutPage = () => {
                             <div className="bg-gray-800 p-6 rounded-lg">
                                 <h3 className="text-blue-400 font-semibold text-lg mb-2">Recognition</h3>
                                 <p className="text-sm">
-                                    AI-powered analysis that identifies your skills, experiences, and potential.
+                                    Smart analysis that identifies your skills, experiences, and potential.
                                 </p>
                             </div>
                             <div className="bg-gray-800 p-6 rounded-lg">
@@ -173,7 +173,7 @@ const AboutPage = () => {
                             </div>
                         </div>
                         <p className="text-xl max-w-3xl mx-auto mt-8">
-                            Our platform combines these three elements to create a comprehensive career development 
+                            Our platform combines these three elements to create a comprehensive career development
                             solution that helps you build, optimize, and present your professional profile effectively.
                         </p>
                     </motion.div>
@@ -229,7 +229,7 @@ const AboutPage = () => {
                             <div className="text-4xl text-blue-400 mb-6">01</div>
                             <h3 className="text-xl font-bold text-white mb-4">Resume Enhancement</h3>
                             <ul className="text-gray-300 space-y-3">
-                                <li>• Get AI-powered suggestions for your resume content</li>
+                                <li>• Get professional suggestions for your resume content</li>
                                 <li>• Highlight your key achievements effectively</li>
                                 <li>• Optimize your resume for ATS systems</li>
                                 <li>• Receive industry-specific formatting recommendations</li>
@@ -307,8 +307,8 @@ const AboutPage = () => {
                         transition={{ delay: 0.2 }}
                         className="text-xl text-gray-400 max-w-3xl mx-auto"
                     >
-                        To empower job seekers with AI-driven tools that make the job search process 
-                        more efficient and effective. We believe in combining technology with human 
+                        To empower job seekers with AI-driven tools that make the job search process
+                        more efficient and effective. We believe in combining technology with human
                         insight to create opportunities for everyone.
                     </motion.p>
                 </div>

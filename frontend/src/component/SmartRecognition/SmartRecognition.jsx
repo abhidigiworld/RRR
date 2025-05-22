@@ -19,7 +19,6 @@ const SmartRecognition = () => {
         projects: []
     });
     const [manualSkill, setManualSkill] = useState("");
-    const baseUrl = "http://localhost:3001/";
 
     // Handle file upload
     const handleFileUpload = async (e) => {
@@ -77,7 +76,7 @@ const SmartRecognition = () => {
         }
     };
 
-    // Analyze resume using APILayer
+    // Analyze resume using backend proxy to APILayer
     const analyzeResume = async (file) => {
         if (!file) return;
 
@@ -88,14 +87,30 @@ const SmartRecognition = () => {
             return;
         }
 
-        const API_KEY = "i1dICO8qepNPn2NAHJuhVrHaLgttpzhS"; // Updated APILayer API Key
         try {
             console.log("Analyzing resume from URL:", fileUrl);
-            const response = await fetch(`https://api.apilayer.com/resume_parser/url?url=${encodeURIComponent(fileUrl)}`, {
+
+            // Use our backend proxy instead of calling API Layer directly
+            // This avoids CORS issues since the request now comes from our server
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            // Construct the correct URL based on the environment
+            let resumeParserUrl;
+            if (apiUrl === 'http://localhost:3001') {
+                // Local development
+                resumeParserUrl = `${apiUrl}/api/resume-parser`;
+            } else if (apiUrl.endsWith('/api')) {
+                // Production with /api suffix
+                resumeParserUrl = `${apiUrl.slice(0, -4)}/api/resume-parser`;
+            } else {
+                // Production without /api suffix
+                resumeParserUrl = `${apiUrl}/resume-parser`;
+            }
+
+            console.log("Using resume parser URL:", resumeParserUrl);
+
+            const response = await fetch(`${resumeParserUrl}?url=${encodeURIComponent(fileUrl)}`, {
                 method: "GET",
-                headers: {
-                    apikey: API_KEY,
-                },
             });
 
             if (!response.ok) {
@@ -263,8 +278,26 @@ const SmartRecognition = () => {
 
             console.log("Enhanced data for backend:", enhancedData);
 
+            // Get the correct base URL
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            // Construct the correct URL based on the environment
+            let smartRecognitionUrl;
+            if (apiUrl === 'http://localhost:3001') {
+                // Local development
+                smartRecognitionUrl = `${apiUrl}/api/smart-recognition`;
+            } else if (apiUrl.endsWith('/api')) {
+                // Production with /api suffix
+                smartRecognitionUrl = `${apiUrl.slice(0, -4)}/api/smart-recognition`;
+            } else {
+                // Production without /api suffix
+                smartRecognitionUrl = `${apiUrl}/smart-recognition`;
+            }
+
+            console.log("Using smart recognition URL:", smartRecognitionUrl);
+
             // Send the enhanced data to the backend for AI analysis
-            const analysisResponse = await axios.post(`${baseUrl}api/smart-recognition`, {
+            const analysisResponse = await axios.post(smartRecognitionUrl, {
                 resumeData: enhancedData,
                 useAI: true // Explicitly request AI analysis
             }, { headers });

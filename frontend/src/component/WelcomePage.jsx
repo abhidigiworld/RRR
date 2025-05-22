@@ -30,9 +30,9 @@ const WelcomePage = () => {
 
     const features = [
         {
-            icon: FaRobot,
-            title: "AI-Powered Resume Builder",
-            description: "Create professional resumes tailored to your industry with our advanced AI technology.",
+            icon: FaFileAlt,
+            title: "Resume Builder",
+            description: "Create professional resumes tailored to your industry with our intuitive builder.",
             path: "/resume-builder"
         },
         {
@@ -56,7 +56,7 @@ const WelcomePage = () => {
             <Header />
 
             {/* Hero Section with AI Eye Background */}
-            <section 
+            <section
                 className="relative h-screen w-full flex items-center"
                 style={{
                     backgroundImage: `url(${backgroundImage})`,
@@ -69,7 +69,7 @@ const WelcomePage = () => {
                 <div className="absolute inset-0 bg-black bg-opacity-60"></div>
                 <div className="relative w-full max-w-7xl mx-auto px-4 z-10">
                     <div className="flex flex-col md:flex-row items-start gap-12">
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, x: -50 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.8 }}
@@ -79,7 +79,7 @@ const WelcomePage = () => {
                                 {user ? `Welcome back, ${user.fullName}` : 'Welcome to RRR'}
                             </h2>
                             <p className="text-2xl text-gray-300 mb-12 text-left leading-relaxed">
-                                AI-powered tools to create professional resumes and ace interviews.
+                                Professional tools to create standout resumes and ace interviews.
                                 Your path to success starts here.
                             </p>
                             <div className="flex flex-row gap-6">
@@ -108,19 +108,19 @@ const WelcomePage = () => {
                             transition={{ duration: 0.8 }}
                             className="flex-1 hidden md:flex justify-end"
                         >
-                           
+
                         </motion.div>
                     </div>
                 </div>
-                
+
                 {/* Scroll Indicator */}
-                <motion.div 
+                <motion.div
                     className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
                     animate={{ y: [0, 10, 0] }}
                     transition={{ duration: 1.5, repeat: Infinity }}
                 >
                     <div className="w-8 h-12 border-2 border-white rounded-full flex justify-center p-2">
-                        <motion.div 
+                        <motion.div
                             className="w-2 h-2 bg-white rounded-full"
                             animate={{ y: [0, 16, 0] }}
                             transition={{ duration: 1.5, repeat: Infinity }}
@@ -146,12 +146,12 @@ const WelcomePage = () => {
                             designed to give you the competitive edge.
                         </p>
                     </motion.div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {features.map((feature, index) => (
-                            <FeatureCard 
-                                key={index} 
-                                {...feature} 
+                            <FeatureCard
+                                key={index}
+                                {...feature}
                                 onNavigate={navigate}
                             />
                         ))}

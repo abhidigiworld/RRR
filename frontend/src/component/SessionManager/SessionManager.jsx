@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast, ToastContainer } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { jwtDecode } from 'jwt-decode';
 
@@ -9,6 +9,11 @@ const SessionManager = () => {
     const [sessionExpiring, setSessionExpiring] = useState(false);
     const [warningShown, setWarningShown] = useState(false);
     const [expiredShown, setExpiredShown] = useState(false);
+
+    // Refs to store toast IDs
+    const warningToastId = useRef(null);
+    const successToastId = useRef(null);
+    const errorToastId = useRef(null);
 
     // Check if we're in a browser environment
     const isBrowser = typeof window !== 'undefined';
@@ -27,21 +32,43 @@ const SessionManager = () => {
         }
     };
 
+    // Function to get user ID from token
+    const getUserIdFromToken = () => {
+        const token = localStorage.getItem('token');
+        if (!token) return null;
+
+        try {
+            const decodedToken = jwtDecode(token);
+            return decodedToken.id; // Get user ID directly from token
+        } catch (error) {
+            console.error('Error getting user ID from token:', error);
+            return null;
+        }
+    };
+
     // Function to refresh the token
     const refreshSession = async () => {
         try {
-            // Get current user info
-            const user = JSON.parse(localStorage.getItem('user'));
-
-            if (!user || !user._id) {
-                throw new Error('User information not found');
+            // Dismiss any existing warning toast
+            if (warningToastId.current) {
+                toast.dismiss(warningToastId.current);
+                warningToastId.current = null;
             }
+
+            // Get user ID from token instead of localStorage
+            const userId = getUserIdFromToken();
+
+            if (!userId) {
+                throw new Error('User ID not found in token');
+            }
+
+            console.log('Refreshing session for user ID:', userId);
 
             // Call refresh token endpoint to get a new token
             const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/refresh-token`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user._id })
+                body: JSON.stringify({ userId })
             });
 
             if (!response.ok) {
@@ -75,10 +102,20 @@ const SessionManager = () => {
                     setSessionExpiring(false);
                     setWarningShown(false);
 
-                    toast.success('Your session has been extended!', {
-                        position: "top-center",
-                        autoClose: 3000
-                    });
+                    // Show success toast
+                    if (successToastId.current) {
+                        toast.update(successToastId.current, {
+                            render: 'Your session has been extended!',
+                            type: toast.TYPE.SUCCESS,
+                            autoClose: 3000
+                        });
+                    } else {
+                        successToastId.current = toast.success('Your session has been extended!', {
+                            position: "top-center",
+                            autoClose: 3000,
+                            onClose: () => { successToastId.current = null; }
+                        });
+                    }
 
                     return true;
                 }
@@ -95,20 +132,39 @@ const SessionManager = () => {
             setSessionExpiring(false);
             setWarningShown(false);
 
-            toast.success('Your session has been extended!', {
-                position: "top-center",
-                autoClose: 3000
-            });
+            // Show success toast
+            if (successToastId.current) {
+                toast.update(successToastId.current, {
+                    render: 'Your session has been extended!',
+                    type: toast.TYPE.SUCCESS,
+                    autoClose: 3000
+                });
+            } else {
+                successToastId.current = toast.success('Your session has been extended!', {
+                    position: "top-center",
+                    autoClose: 3000,
+                    onClose: () => { successToastId.current = null; }
+                });
+            }
 
             return true;
         } catch (error) {
             console.error('Error refreshing session:', error);
 
             // Show error notification
-            toast.error('Could not extend your session. Please log in again.', {
-                position: "top-center",
-                autoClose: 5000
-            });
+            if (errorToastId.current) {
+                toast.update(errorToastId.current, {
+                    render: 'Could not extend your session. Please log in again.',
+                    type: toast.TYPE.ERROR,
+                    autoClose: 5000
+                });
+            } else {
+                errorToastId.current = toast.error('Could not extend your session. Please log in again.', {
+                    position: "top-center",
+                    autoClose: 5000,
+                    onClose: () => { errorToastId.current = null; }
+                });
+            }
 
             return false;
         }
@@ -140,26 +196,37 @@ const SessionManager = () => {
     // Function to show warning before expiration
     const showExpirationWarning = () => {
         if (!warningShown) {
-            toast.warn(
+            // Create a custom component for the warning toast
+            const WarningContent = () => (
                 <div>
                     <p>Your session will expire in 5 minutes.</p>
                     <button
-                        onClick={refreshSession}
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevent toast from closing when clicking the button
+                            refreshSession();
+                        }}
                         className="mt-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-4 rounded"
                     >
                         Extend Session
                     </button>
-                </div>,
-                {
-                    position: "top-center",
-                    autoClose: false,
-                    hideProgressBar: false,
-                    closeOnClick: false,
-                    pauseOnHover: true,
-                    draggable: false,
-                    progress: undefined,
-                }
+                </div>
             );
+
+            // Show the warning toast
+            warningToastId.current = toast.warn(<WarningContent />, {
+                position: "top-center",
+                autoClose: false,
+                hideProgressBar: false,
+                closeOnClick: false,
+                pauseOnHover: true,
+                draggable: false,
+                progress: undefined,
+                onClose: () => {
+                    setWarningShown(false);
+                    warningToastId.current = null;
+                }
+            });
+
             setWarningShown(true);
             setSessionExpiring(true);
         }
@@ -179,6 +246,8 @@ const SessionManager = () => {
                 const currentTime = Date.now();
                 const timeUntilExpiration = expirationTime - currentTime;
 
+                console.log('Time until token expiration:', Math.floor(timeUntilExpiration / 1000), 'seconds');
+
                 // If token is expired
                 if (timeUntilExpiration <= 0) {
                     handleSessionExpired();
@@ -186,7 +255,7 @@ const SessionManager = () => {
                 }
 
                 // If token will expire in 5 minutes (300000 ms) or less
-                if (timeUntilExpiration <= 300000 && !sessionExpiring) {
+                if (timeUntilExpiration <= 300000 && !sessionExpiring && !warningShown) {
                     showExpirationWarning();
                 }
             } catch (error) {
@@ -202,7 +271,8 @@ const SessionManager = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionExpiring, warningShown, expiredShown, isBrowser]);
 
-    return <ToastContainer />;
+    // No need to return ToastContainer as it's already in App.jsx
+    return null;
 };
 
 export default SessionManager;

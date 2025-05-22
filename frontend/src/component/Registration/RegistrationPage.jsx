@@ -10,7 +10,6 @@ const RegistrationPage = () => {
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
-        ageCategory: "",
         password: "",
         confirmPassword: "",
     });
@@ -65,7 +64,7 @@ const RegistrationPage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!otpData.isOtpVerified) {
             toast.error("Please verify your email first");
             return;
@@ -85,7 +84,7 @@ const RegistrationPage = () => {
             });
 
             const data = await response.json();
-            
+
             if (response.ok) {
                 toast.success("Registration successful! Please login.");
                 setTimeout(() => {
@@ -112,7 +111,7 @@ const RegistrationPage = () => {
             const response = await fetch(`${import.meta.env.VITE_API_URL}/send-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     email: formData.email,
                     type: 'registration'
                 })
@@ -121,9 +120,9 @@ const RegistrationPage = () => {
             const data = await response.json();
             if (response.ok) {
                 toast.success("OTP sent successfully!");
-                setOtpData(prev => ({ 
-                    ...prev, 
-                    isOtpSent: true 
+                setOtpData(prev => ({
+                    ...prev,
+                    isOtpSent: true
                 }));
             } else {
                 toast.error(data.message || "Failed to send OTP");
@@ -236,20 +235,6 @@ const RegistrationPage = () => {
                                     </motion.button>
                                 </div>
                             )}
-
-                            {/* Age Category Select */}
-                            <select
-                                name="ageCategory"
-                                value={formData.ageCategory}
-                                onChange={handleChange}
-                                required
-                                className="w-full px-6 py-3 text-black rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-                            >
-                                <option value="" disabled>Select Age Category</option>
-                                <option value="Student">Student</option>
-                                <option value="Professional">Professional</option>
-                                <option value="Other">Other</option>
-                            </select>
 
                             {/* Password Input */}
                             <div className="space-y-1">
