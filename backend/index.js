@@ -1070,41 +1070,26 @@ app.get('/api/resume-parser', async (req, res) => {
         console.log('Proxying resume parsing request for URL:', url);
 
         // Use the confirmed working API key
-        const API_KEY = "e7e4d9ce64mshbf9dc3036f70266p186723jsne74c67f1a2ca";
+        const API_KEY = "fcBzkrycqrjXAYHRKnoyh4Q44ussckpt";
 
         try {
             // Determine the correct URL based on API key format
             let requestUrl;
 
-            // Check if the API key is in RapidAPI format (contains msh)
-            if (API_KEY.includes('msh')) {
-                requestUrl = `https://resume-parser.p.rapidapi.com/url?url=${encodeURIComponent(url)}`;
-                console.log('Using RapidAPI URL format:', requestUrl);
-            } else {
-                requestUrl = `https://api.apilayer.com/resume_parser/url?url=${encodeURIComponent(url)}`;
-                console.log('Using API Layer URL format:', requestUrl);
-            }
+            // The new API key is for API Layer
+            requestUrl = `https://api.apilayer.com/resume_parser/url?url=${encodeURIComponent(url)}`;
+            console.log('Using API Layer URL format:', requestUrl);
 
             // Determine the correct header format based on API key format
             let headers = {};
 
-            // Check if the API key is in RapidAPI format (contains msh)
-            if (API_KEY.includes('msh')) {
-                console.log('Using RapidAPI header format');
-                headers = {
-                    'X-RapidAPI-Key': API_KEY,
-                    'X-RapidAPI-Host': 'resume-parser.p.rapidapi.com',
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                };
-            } else {
-                console.log('Using API Layer header format');
-                headers = {
-                    'apikey': API_KEY,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                };
-            }
+            // The new API key is for API Layer
+            console.log('Using API Layer header format');
+            headers = {
+                'apikey': API_KEY,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
 
             // Make the request to API Layer from the server with proper headers
             const response = await fetch(requestUrl, {
